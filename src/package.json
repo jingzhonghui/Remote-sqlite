@@ -1,0 +1,129 @@
+{
+  "name": "remote-sqlite",
+  "version": "1.0.0",
+  "description": "跨平台远程 SQLite 数据库管理桌面应用",
+  "homepage": "https://github.com/yourusername/remote-sqlite",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "electron:dev": "npm run build && electron .",
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:linux": "npm run build && electron-builder --linux",
+    "electron:build:linux:appimage": "bash scripts/build-linux.sh",
+    "electron:build:linux:deb": "npm run build && electron-builder --linux deb",
+    "electron:build:linux:rpm": "npm run build && electron-builder --linux rpm",
+    "electron:build:win": "npm run build && electron-builder --win",
+    "electron:build:win:all": "npm run build && electron-builder --win nsis portable zip",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "clsx": "^2.0.0",
+    "lucide-react": "^0.294.0",
+    "monaco-editor": "^0.45.0",
+    "pnpm": "^10.33.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "ssh2": "^1.15.0",
+    "tailwind-merge": "^2.1.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@types/ssh2": "^1.11.18",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8",
+    "vite-plugin-electron": "^0.28.0",
+    "vite-plugin-electron-renderer": "^0.14.5"
+  },
+  "build": {
+    "appId": "com.example.remote-sqlite",
+    "productName": "RemoteSQLite",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "node_modules/ssh2/**/*",
+      "node_modules/cpu-features/**/*",
+      "node_modules/nan/**/*",
+      "node_modules/buildcheck/**/*",
+      "node_modules/asn1/**/*",
+      "node_modules/bcrypt-pbkdf/**/*",
+      "node_modules/safer-buffer/**/*",
+      "node_modules/tweetnacl/**/*",
+      "node_modules/@monaco-editor/react/**/*",
+      "node_modules/monaco-editor/**/*",
+      "node_modules/state-local/**/*",
+      "node_modules/use-sync-external-store/**/*"
+    ],
+    "asar": false,
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
+    "nodeGypRebuild": false,
+    "includePdb": true,
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "maintainer": "your-email@example.com",
+      "vendor": "Your Name",
+      "synopsis": "Remote SQLite Database Manager",
+      "description": "A cross-platform desktop application for managing remote SQLite databases via SSH",
+      "desktop": {
+        "Name": "RemoteSQLite",
+        "Comment": "Remote SQLite Database Manager",
+        "Categories": "Development;Database;"
+      }
+    }
+  }
+}

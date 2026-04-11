@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RemoteSQLite — 桌面应用原型图</title>
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --sidebar-bg: #181825;
+    --panel-bg: #24243e;
+    --border: #313145;
+    --accent: #7c6af7;
+    --accent2: #56b6c2;
+    --text: #cdd6f4;
+    --text-muted: #6c7086;
+    --text-dim: #a6adc8;
+    --green: #a6e3a1;
+    --red: #f38ba8;
+    --yellow: #f9e2af;
+    --blue: #89b4fa;
+    --orange: #fab387;
+    --hover: #313150;
+    --selected: #3d3d62;
+    --tab-active: #7c6af7;
+    --input-bg: #2a2a45;
+    --header-bg: #16162a;
+    --toolbar-bg: #1a1a30;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0f0f1a;
+    color: var(--text);
+    font-size: 13px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ===== TOP NAV TABS (page switcher) ===== */
+  .page-nav {
+    display: flex;
+    background: #0a0a16;
+    border-bottom: 2px solid var(--accent);
+    padding: 0 16px;
+    gap: 2px;
+    flex-shrink: 0;
+    align-items: center;
+  }
+  .page-nav .nav-label {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+    margin-right: 16px;
+    letter-spacing: 1px;
+  }
+  .page-nav button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .page-nav button:hover { color: var(--text); background: var(--hover); }
+  .page-nav button.active { color: #fff; border-bottom-color: var(--accent); background: rgba(124,106,247,0.12); }
+
+  /* ===== PAGES ===== */
+  .page { display: none; flex: 1; overflow: hidden; }
+  .page.active { display: flex; flex-direction: column; }
+
+  /* ===== APP SHELL ===== */
+  .app-shell { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  /* Menu bar */
+  .menubar {
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    height: 32px;
+    flex-shrink: 0;
+    gap: 2px;
+  }
+  .menubar .logo { color: var(--accent); font-weight: 800; font-size: 13px; margin-right: 12px; letter-spacing: 0.5px; }
+  .menubar .logo span { color: var(--accent2); }
+  .menu-item {
+    padding: 4px 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .menu-item:hover { background: var(--hover); color: var(--text); }
+  .menubar .spacer { flex: 1; }
+  .menubar .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .menubar .status-text { color: var(--green); font-size: 11px; margin-right: 12px; }
+
+  /* Main content area */
+  .main-area { display: flex; flex: 1; overflow: hidden; }
+
+  /* Left sidebar */
+  .sidebar {
+    width: 220px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-section-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .sidebar-section-header:hover { background: var(--hover); }
+  .sidebar-section-header .icon { margin-right: 6px; font-size: 12px; }
+  .sidebar-section-header .badge {
+    margin-left: auto;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+  .conn-item {
+    display: flex;
+    align-items: center;
+    padding: 7px 12px 7px 22px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 12px;
+    gap: 7px;
+  }
+  .conn-item:hover { background: var(--hover); }
+  .conn-item.active { background: var(--selected); color: var(--text); }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .conn-dot.online { background: var(--green); }
+  .conn-dot.offline { background: var(--text-muted); }
+  .conn-dot.connecting { background: var(--yellow); animation: pulse 1s infinite; }
+
+  .tree-item {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px 5px 16px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 12px;
+    gap: 6px;
+  }
+  .tree-item:hover { background: var(--hover); color: var(--text); }
+  .tree-item.active { background: var(--selected); color: var(--accent); }
+  .tree-item .icon { font-size: 13px; }
+  .tree-group {
+    padding: 4px 10px 2px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .tree-group-line { flex:1; height:1px; background: var(--border); }
+
+  /* Content area */
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+  /* Tabs */
+  .db-tabs {
+    display: flex;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    gap: 2px;
+    align-items: flex-end;
+    height: 36px;
+    flex-shrink: 0;
+  }
+  .db-tab {
+    padding: 6px 14px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    border-bottom: none;
+  }
+  .db-tab:hover { color: var(--text); background: var(--hover); }
+  .db-tab.active { background: var(--bg); color: var(--text); border-color: var(--border); }
+  .db-tab .close { color: var(--text-muted); font-size: 14px; line-height: 1; }
+  .db-tab .close:hover { color: var(--red); }
+  .db-tab .db-icon { color: var(--accent2); }
+  .add-tab { padding: 6px 10px; color: var(--text-muted); cursor: pointer; font-size: 16px; }
+  .add-tab:hover { color: var(--accent); }
+
+  /* Toolbar */
+  .toolbar {
+    background: var(--toolbar-bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 4px 10px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .tool-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .tool-btn:hover { background: var(--hover); border-color: var(--border); color: var(--text); }
+  .tool-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tool-btn.primary:hover { background: #8b7aff; }
+  .tool-btn.danger:hover { background: rgba(243,139,168,0.15); color: var(--red); border-color: var(--red); }
+  .tool-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  .tool-search {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    width: 200px;
+    font-family: inherit;
+  }
+  .tool-search:focus { outline: none; border-color: var(--accent); }
+  .tool-search::placeholder { color: var(--text-muted); }
+  .toolbar .spacer { flex: 1; }
+  .page-info { color: var(--text-muted); font-size: 11px; }
+
+  /* Data table */
+  .table-area { flex: 1; overflow: auto; }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .data-table th {
+    background: var(--panel-bg);
+    color: var(--text-dim);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    cursor: pointer;
+    user-select: none;
+  }
+  .data-table th:hover { background: var(--hover); color: var(--text); }
+  .data-table th .sort-icon { color: var(--accent); margin-left: 4px; }
+  .data-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(49,49,69,0.5);
+    border-right: 1px solid rgba(49,49,69,0.3);
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .data-table tr:hover td { background: rgba(124,106,247,0.06); }
+  .data-table tr.selected td { background: rgba(124,106,247,0.15); }
+  .data-table td.null { color: var(--text-muted); font-style: italic; }
+  .data-table td.pk { color: var(--yellow); font-weight: 600; }
+  .row-num { color: var(--text-muted); font-size: 11px; width: 40px; text-align: right; padding-right: 8px; }
+  .checkbox-col { width: 32px; text-align: center; }
+  input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
+
+  /* Status bar */
+  .statusbar {
+    background: var(--header-bg);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 3px 12px;
+    gap: 16px;
+    flex-shrink: 0;
+    height: 24px;
+  }
+  .statusbar .item {
+    color: var(--text-muted);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .statusbar .item .val { color: var(--text-dim); }
+  .statusbar .item.ok .val { color: var(--green); }
+  .statusbar .spacer { flex: 1; }
+
+  /* Inline edit cell */
+  .cell-editing input {
+    background: var(--input-bg);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 3px;
+    width: 100%;
+    font-family: inherit;
+  }
+
+  /* ===== PAGE 2: SSH Connections ===== */
+  .conn-page { display: flex; flex: 1; overflow: hidden; }
+  .conn-list-panel {
+    width: 280px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .panel-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .panel-header .spacer { flex: 1; }
+  .icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--accent); }
+  .conn-card {
+    margin: 8px 10px;
+    padding: 10px 12px;
+    background: var(--panel-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .conn-card:hover { border-color: var(--accent); }
+  .conn-card.active { border-color: var(--accent); background: rgba(124,106,247,0.1); }
+  .conn-card .name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .conn-card .host { color: var(--text-muted); font-size: 11px; font-family: 'Consolas', monospace; }
+  .conn-card .status-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .status-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .status-badge.connected { background: rgba(166,227,161,0.15); color: var(--green); border: 1px solid rgba(166,227,161,0.3); }
+  .status-badge.disconnected { background: rgba(108,112,134,0.15); color: var(--text-muted); border: 1px solid rgba(108,112,134,0.3); }
+  .status-badge.connecting { background: rgba(249,226,175,0.15); color: var(--yellow); border: 1px solid rgba(249,226,175,0.3); }
+  .conn-form-panel {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+  }
+  .form-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: var(--text); }
+  .form-row { margin-bottom: 14px; }
+  .form-row label { display: block; color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
+  .form-row label .required { color: var(--red); }
+  .form-input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { outline: none; border-color: var(--accent); }
+  .form-input::placeholder { color: var(--text-muted); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+  .radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .radio-btn {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 5px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  .radio-btn:hover { border-color: var(--accent); color: var(--text); }
+  .radio-btn.active { background: rgba(124,106,247,0.15); border-color: var(--accent); color: var(--accent); }
+  .form-actions { display: flex; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .btn {
+    padding: 7px 18px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #8b7aff; }
+  .btn-secondary { background: var(--input-bg); border: 1px solid var(--border); color: var(--text-dim); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+  .btn-success { background: rgba(166,227,161,0.2); border: 1px solid var(--green); color: var(--green); }
+  .btn-success:hover { background: rgba(166,227,161,0.3); }
+  .btn-danger { background: rgba(243,139,168,0.15); border: 1px solid var(--red); color: var(--red); }
+  .test-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 12px;
+  }
+  .test-result.ok { background: rgba(166,227,161,0.1); border: 1px solid rgba(166,227,161,0.3); color: var(--green); }
+  .test-result.err { background: rgba(243,139,168,0.1); border: 1px solid rgba(243,139,168,0.3); color: var(--red); }
+
+  /* ===== PAGE 3: SQL Editor ===== */
+  .sql-page { display: flex; flex: 1; overflow: hidden; flex-direction: column; }
+  .sql-main { display: flex; flex: 1; overflow: hidden; }
+  .sql-sidebar {
+    width: 220px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sql-editor-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .editor-container {
+    flex: 1;
+    background: #1a1a2e;
+    font-family: 'Consolas', 'Fira Code', monospace;
+    font-size: 13px;
+    overflow: auto;
+    padding: 12px 16px;
+    line-height: 1.6;
+    position: relative;
+  }
+  .editor-container .line-nums {
+    float: left;
+    color: var(--text-muted);
+    text-align: right;
+    padding-right: 16px;
+    border-right: 1px solid var(--border);
+    margin-right: 16px;
+    user-select: none;
+    min-width: 30px;
+  }
+  .sql-code { display: block; }
+  .kw { color: #c084fc; }
+  .kw2 { color: #60a5fa; }
+  .str { color: #86efac; }
+  .num { color: #fdba74; }
+  .cmt { color: #6b7280; font-style: italic; }
+  .fn { color: #38bdf8; }
+  .tbl { color: #fb923c; }
+  .col { color: #e2e8f0; }
+  .cursor-line { background: rgba(124,106,247,0.08); border-left: 2px solid var(--accent); }
+  .result-panel {
+    height: 220px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .result-tabs {
+    display: flex;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    gap: 2px;
+    align-items: flex-end;
+  }
+  .result-tab {
+    padding: 5px 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .result-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .result-content { flex: 1; overflow: auto; }
+  .exec-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 4px 12px;
+    background: rgba(166,227,161,0.05);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .exec-info .ok { color: var(--green); }
+  .exec-info .info { color: var(--blue); }
+  .autocomplete {
+    position: absolute;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 10;
+    width: 220px;
+    overflow: hidden;
+    top: 80px;
+    left: 160px;
+  }
+  .autocomplete-item {
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Consolas', monospace;
+  }
+  .autocomplete-item:hover, .autocomplete-item.selected { background: var(--selected); }
+  .autocomplete-item .ac-type {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: auto;
+  }
+  .ac-kw { background: rgba(192,132,252,0.2); color: #c084fc; }
+  .ac-tbl { background: rgba(251,146,60,0.2); color: #fb923c; }
+  .ac-col { background: rgba(56,189,248,0.2); color: #38bdf8; }
+  .history-item {
+    padding: 6px 10px;
+    font-size: 11px;
+    font-family: 'Consolas', monospace;
+    color: var(--text-dim);
+    border-bottom: 1px solid rgba(49,49,69,0.4);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .history-item:hover { background: var(--hover); color: var(--text); }
+  .history-item .ts { color: var(--text-muted); font-family: sans-serif; font-size: 10px; margin-right: 6px; }
+
+  /* ===== PAGE 4: Visual Table Builder ===== */
+  .builder-page { display: flex; flex: 1; overflow: hidden; }
+  .builder-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+  .builder-right {
+    width: 340px;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .builder-toolbar {
+    background: var(--toolbar-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .table-name-input {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    width: 200px;
+    font-family: inherit;
+  }
+  .table-name-input:focus { outline: none; border-color: var(--accent); }
+  .col-table-area { flex: 1; overflow: auto; padding: 14px; }
+  .col-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .col-table th {
+    background: var(--panel-bg);
+    color: var(--text-muted);
+    padding: 8px 10px;
+    text-align: left;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .col-table td {
+    border: 1px solid var(--border);
+    padding: 5px 8px;
+    vertical-align: middle;
+  }
+  .col-table tr:hover td { background: rgba(124,106,247,0.04); }
+  .col-table tr.drag-row td { background: rgba(124,106,247,0.1); border-color: var(--accent); }
+  .col-input {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 12px;
+    width: 100%;
+    font-family: 'Consolas', monospace;
+    padding: 2px 4px;
+  }
+  .col-input:focus { outline: 1px solid var(--accent); border-radius: 3px; background: var(--input-bg); }
+  .type-select {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--blue);
+    font-size: 11px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: 'Consolas', monospace;
+    cursor: pointer;
+  }
+  .type-select:focus { outline: none; border-color: var(--accent); }
+  .constraint-checks { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chk-badge {
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid transparent;
+    user-select: none;
+    transition: all 0.15s;
+  }
+  .chk-badge.pk { background: rgba(249,226,175,0.15); color: var(--yellow); border-color: rgba(249,226,175,0.3); }
+  .chk-badge.nn { background: rgba(243,139,168,0.12); color: var(--red); border-color: rgba(243,139,168,0.25); }
+  .chk-badge.uq { background: rgba(137,180,250,0.12); color: var(--blue); border-color: rgba(137,180,250,0.25); }
+  .chk-badge.ai { background: rgba(166,227,161,0.12); color: var(--green); border-color: rgba(166,227,161,0.25); }
+  .chk-badge.off { opacity: 0.3; }
+  .drag-handle { color: var(--text-muted); cursor: grab; padding: 0 6px; }
+  .drag-handle:hover { color: var(--text); }
+  .row-del-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .row-del-btn:hover { color: var(--red); background: rgba(243,139,168,0.1); }
+  .add-col-btn {
+    margin: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--input-bg);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  .add-col-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .ddl-preview {
+    flex: 1;
+    background: #1a1a2e;
+    padding: 14px;
+    font-family: 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow: auto;
+    border-top: 1px solid var(--border);
+  }
+  .index-section {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .index-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .index-row .idx-name { font-family: 'Consolas', monospace; color: var(--blue); }
+  .index-row .idx-cols { color: var(--text-muted); font-size: 11px; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    min-width: 360px;
+    max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .modal-body { color: var(--text-dim); font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-title.warn { color: var(--red); }
+
+  /* Tooltip */
+  .tooltip-demo {
+    position: absolute;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* Responsive tweaks */
+  .overflow-hidden { overflow: hidden; }
+  .flex-col { display: flex; flex-direction: column; }
+  .flex-1 { flex: 1; }
+
+  /* Tag for type indicators */
+  .type-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-weight: 600;
+  }
+  .type-integer { background: rgba(249,226,175,0.15); color: var(--yellow); }
+  .type-text { background: rgba(166,227,161,0.12); color: var(--green); }
+  .type-real { background: rgba(137,180,250,0.12); color: var(--blue); }
+  .type-blob { background: rgba(243,139,168,0.12); color: var(--red); }
+
+  /* Notification toast */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    right: 24px;
+    background: var(--panel-bg);
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    z-index: 200;
+    animation: slideIn 0.3s ease;
+    transition: opacity 0.3s;
+  }
+  .toast.hidden { opacity: 0; pointer-events: none; }
+  @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  .fk-badge { color: var(--orange); font-size: 10px; }
+</style>
+</head>
+<body>
+
+<!-- Page navigation (prototype switcher) -->
+<div class="page-nav">
+  <span class="nav-label">🗄 RemoteSQLite</span>
+  <button class="active" onclick="showPage('main')">① 主界面 · 数据浏览</button>
+  <button onclick="showPage('ssh')">② SSH 连接管理</button>
+  <button onclick="showPage('sql')">③ SQL 编辑器</button>
+  <button onclick="showPage('builder')">④ 可视化建表</button>
+</div>
+
+<!-- ============================================================
+     PAGE 1: MAIN — Data Browser
+     ============================================================ -->
+<div class="page active" id="page-main">
+  <div class="app-shell">
+    <!-- Menu bar -->
+    <div class="menubar">
+      <span class="logo">Remote<span>SQLite</span></span>
+      <span class="menu-item">文件</span>
+      <span class="menu-item">连接</span>
+      <span class="menu-item">视图</span>
+      <span class="menu-item">工具</span>
+      <span class="menu-item">帮助</span>
+      <div class="spacer"></div>
+      <div class="status-dot"></div>
+      <span class="status-text">prod-server · 已连接</span>
+    </div>
+
+    <div class="main-area">
+      <!-- Left sidebar -->
+      <div class="sidebar">
+        <!-- Connections -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <span class="icon">🔌</span> 连接
+            <span class="badge">3</span>
+          </div>
+          <div class="conn-item active">
+            <div class="conn-dot online"></div>
+            prod-server
+          </div>
+          <div class="conn-item">
+            <div class="conn-dot online"></div>
+            dev-server
+          </div>
+          <div class="conn-item">
+            <div class="conn-dot offline"></div>
+            test-server
+          </div>
+        </div>
+
+        <!-- Object tree -->
+        <div class="sidebar-section" style="flex:1; overflow:hidden; display:flex; flex-direction:column;">
+          <div class="sidebar-section-header">
+            <span class="icon">🗄</span> app.db
+            <span style="margin-left:auto; color:var(--text-muted); font-size:10px;">2.4 MB</span>
+          </div>
+          <div style="overflow-y:auto; flex:1;">
+            <div class="tree-group">
+              <span>表</span>
+              <div class="tree-group-line"></div>
+            </div>
+            <div class="tree-item active">
+              <span class="icon">📋</span> users
+              <span style="margin-left:auto; color:var(--text-muted); font-size:10px;">1,247</span>
+            </div>
+            <div class="tree-item">
+              <span class="icon">📋</span> orders
+              <span style="margin-left:auto; color:var(--text-muted); font-size:10px;">8,903</span>
+            </div>
+            <div class="tree-item">
+              <span class="icon">📋</span> products
+              <span style="margin-left:auto; color:var(--text-muted); font-size:10px;">342</span>
+            </div>
+            <div class="tree-item">
+              <span class="icon">📋</span> categories
+            </div>
+            <div class="tree-item">
+              <span class="icon">📋</span> sessions
+            </div>
+            <div class="tree-group" style="margin-top:6px;">
+              <span>视图</span>
+              <div class="tree-group-line"></div>
+            </div>
+            <div class="tree-item">
+              <span class="icon">👁</span> user_stats
+            </div>
+            <div class="tree-item">
+              <span class="icon">👁</span> order_summary
+            </div>
+            <div class="tree-group" style="margin-top:6px;">
+              <span>索引</span>
+              <div class="tree-group-line"></div>
+            </div>
+            <div class="tree-item">
+              <span class="icon">⚡</span> idx_users_email
+            </div>
+            <div class="tree-item">
+              <span class="icon">⚡</span> idx_orders_uid
+            </div>
+            <div class="tree-group" style="margin-top:6px;">
+              <span>触发器</span>
+              <div class="tree-group-line"></div>
+            </div>
+            <div class="tree-item">
+              <span class="icon">⚙</span> trg_update_ts
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="content">
+        <!-- DB tabs -->
+        <div class="db-tabs">
+          <div class="db-tab active">
+            <span class="db-icon">🗄</span>
+            app.db
+            <span class="close" onclick="event.stopPropagation()">×</span>
+          </div>
+          <div class="db-tab">
+            <span class="db-icon">🗄</span>
+            analytics.db
+            <span class="close">×</span>
+          </div>
+          <div class="add-tab">+</div>
+          <div style="flex:1"></div>
+          <div style="padding: 6px 10px; color:var(--text-muted); font-size:11px;">
+            📂 /var/app/data/app.db
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <button class="tool-btn primary" onclick="showModal('add-modal')">＋ 新增行</button>
+          <button class="tool-btn danger" onclick="showModal('del-modal')">🗑 删除</button>
+          <button class="tool-btn" onclick="showToast('已刷新数据')">↺ 刷新</button>
+          <div class="tool-sep"></div>
+          <button class="tool-btn">⬇ 导出</button>
+          <button class="tool-btn">📤 导入</button>
+          <div class="tool-sep"></div>
+          <input class="tool-search" type="text" placeholder="🔍 搜索...">
+          <div class="spacer"></div>
+          <span class="page-info">共 1,247 行 &nbsp;|&nbsp; 第 1-100 行</span>
+          <button class="tool-btn">‹</button>
+          <button class="tool-btn">›</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-area">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox"></th>
+                <th class="row-num">#</th>
+                <th>id <span class="sort-icon">↑</span></th>
+                <th>username</th>
+                <th>email</th>
+                <th>role</th>
+                <th>status</th>
+                <th>created_at</th>
+                <th>last_login</th>
+                <th>score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" checked></td>
+                <td class="row-num">1</td>
+                <td class="pk">1</td>
+                <td>alice_w</td>
+                <td>alice@example.com</td>
+                <td><span style="background:rgba(124,106,247,0.2);color:#c084fc;padding:2px 7px;border-radius:10px;font-size:11px;">admin</span></td>
+                <td><span style="background:rgba(166,227,161,0.15);color:var(--green);padding:2px 7px;border-radius:10px;font-size:11px;">active</span></td>
+                <td>2024-01-15 09:22:11</td>
+                <td>2026-04-09 18:30:00</td>
+                <td>9850</td>
+              </tr>
+              <tr class="selected">
+                <td class="checkbox-col"><input type="checkbox" checked></td>
+                <td class="row-num">2</td>
+                <td class="pk">2</td>
+                <td>bob_zhang</td>
+                <td>bob@example.com</td>
+                <td><span style="background:rgba(137,180,250,0.15);color:var(--blue);padding:2px 7px;border-radius:10px;font-size:11px;">user</span></td>
+                <td><span style="background:rgba(166,227,161,0.15);color:var(--green);padding:2px 7px;border-radius:10px;font-size:11px;">active</span></td>
+                <td>2024-03-22 14:10:05</td>
+                <td>2026-04-10 08:15:33</td>
+                <td>4320</td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox"></td>
+                <td class="row-num">3</td>
+                <td class="pk">3</td>
+                <td class="cell-editing"><input value="carol_li" style="width:90px"></td>
+                <td>carol@example.com</td>
+                <td><span style="background:rgba(137,180,250,0.15);color:var(--blue);padding:2px 7px;border-radius:10px;font-size:11px;">user</span></td>
+                <td><span style="background:rgba(249,226,175,0.15);color:var(--yellow);padding:2px 7px;border-radius:10px;font-size:11px;">pending</span></td>
+                <td>2024-05-10 11:00:00</td>
+                <td class="null">NULL</td>
+                <td>780</td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox"></td>
+                <td class="row-num">4</td>
+                <td class="pk">4</td>
+                <td>david_m</td>
+                <td>david@corp.io</td>
+                <td><span style="background:rgba(137,180,250,0.15);color:var(--blue);padding:2px 7px;border-radius:10px;font-size:11px;">user</span></td>
+                <td><span style="background:rgba(243,139,168,0.15);color:var(--red);padding:2px 7px;border-radius:10px;font-size:11px;">banned</span></td>
+                <td>2024-07-01 00:00:00</td>
+                <td>2025-12-01 10:00:00</td>
+                <td>0</td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox"></td>
+                <td class="row-num">5</td>
+                <td class="pk">5</td>
+                <td>eve_ops</td>
+                <td>eve@devops.net</td>
+                <td><span style="background:rgba(251,146,60,0.15);color:var(--orange);padding:2px 7px;border-radius:10px;font-size:11px;">operator</span></td>
+                <td><span style="background:rgba(166,227,161,0.15);color:var(--green);padding:2px 7px;border-radius:10px;font-size:11px;">active</span></td>
+                <td>2025-01-08 16:44:22</td>
+                <td>2026-04-10 13:50:44</td>
+                <td>6200</td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox"></td>
+                <td class="row-num">6</td>
+                <td class="pk">6</td>
+                <td>frank_dev</td>
+                <td>frank@startup.io</td>
+                <td><span style="background:rgba(137,180,250,0.15);color:var(--blue);padding:2px 7px;border-radius:10px;font-size:11px;">user</span></td>
+                <td><span style="background:rgba(166,227,161,0.15);color:var(--green);padding:2px 7px;border-radius:10px;font-size:11px;">active</span></td>
+                <td>2025-03-15 07:30:00</td>
+                <td>2026-04-08 21:00:00</td>
+                <td>3100</td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox"></td>
+                <td class="row-num">7</td>
+                <td class="pk">7</td>
+                <td>grace_ui</td>
+                <td>grace@design.co</td>
+                <td><span style="background:rgba(137,180,250,0.15);color:var(--blue);padding:2px 7px;border-radius:10px;font-size:11px;">user</span></td>
+                <td><span style="background:rgba(166,227,161,0.15);color:var(--green);padding:2px 7px;border-radius:10px;font-size:11px;">active</span></td>
+                <td>2025-06-20 12:00:00</td>
+                <td>2026-04-07 09:15:00</td>
+                <td>5500</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Status bar -->
+        <div class="statusbar">
+          <div class="item ok">
+            <span>●</span>
+            <span class="val">prod-server 已连接</span>
+          </div>
+          <div class="item">
+            <span>📋</span>
+            <span class="val">users</span>
+          </div>
+          <div class="item">
+            <span>行数</span>
+            <span class="val">1,247</span>
+          </div>
+          <div class="item">
+            <span>已选</span>
+            <span class="val">2 行</span>
+          </div>
+          <div class="spacer"></div>
+          <div class="item">
+            <span>SQLite</span>
+            <span class="val">3.46.1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 2: SSH Connection Manager
+     ============================================================ -->
+<div class="page" id="page-ssh">
+  <div class="app-shell">
+    <div class="menubar">
+      <span class="logo">Remote<span>SQLite</span></span>
+      <span class="menu-item">文件</span>
+      <span class="menu-item">连接</span>
+      <span class="menu-item">视图</span>
+      <span class="menu-item">工具</span>
+      <span class="menu-item">帮助</span>
+      <div class="spacer"></div>
+    </div>
+    <div class="conn-page">
+      <!-- Connection list -->
+      <div class="conn-list-panel">
+        <div class="panel-header">
+          SSH 连接
+          <div class="spacer"></div>
+          <button class="icon-btn" title="新建连接 Ctrl+N">＋</button>
+        </div>
+        <div style="overflow-y:auto; flex:1;">
+          <div class="conn-card active">
+            <div class="name">🖥 prod-server</div>
+            <div class="host">root@192.168.1.100:22</div>
+            <div class="status-row">
+              <span class="status-badge connected">● 已连接</span>
+              <span style="font-size:10px; color:var(--text-muted); margin-left:auto;">127ms</span>
+            </div>
+          </div>
+          <div class="conn-card">
+            <div class="name">💻 dev-server</div>
+            <div class="host">ubuntu@dev.myapp.com:22</div>
+            <div class="status-row">
+              <span class="status-badge connected">● 已连接</span>
+            </div>
+          </div>
+          <div class="conn-card">
+            <div class="name">🧪 test-server</div>
+            <div class="host">admin@10.0.0.55:2222</div>
+            <div class="status-row">
+              <span class="status-badge disconnected">○ 未连接</span>
+            </div>
+          </div>
+          <div class="conn-card">
+            <div class="name">🌐 backup-server</div>
+            <div class="host">deploy@backup.infra.io:22</div>
+            <div class="status-row">
+              <span class="status-badge connecting">◌ 连接中</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection form -->
+      <div class="conn-form-panel">
+        <div class="form-title">✏️ 编辑连接 — prod-server</div>
+
+        <div class="form-row">
+          <label>连接名称 <span class="required">*</span></label>
+          <input class="form-input" value="prod-server">
+        </div>
+
+        <div class="form-row-3">
+          <div class="form-row" style="margin-bottom:0">
+            <label>主机地址 <span class="required">*</span></label>
+            <input class="form-input" value="192.168.1.100">
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label>端口 <span class="required">*</span></label>
+            <input class="form-input" value="22">
+          </div>
+        </div>
+        <div style="margin-bottom:14px;"></div>
+
+        <div class="form-row">
+          <label>用户名 <span class="required">*</span></label>
+          <input class="form-input" value="root">
+        </div>
+
+        <div class="form-row">
+          <label>认证方式 <span class="required">*</span></label>
+          <div class="radio-group">
+            <div class="radio-btn">🔑 密码</div>
+            <div class="radio-btn active">🗝 私钥文件</div>
+            <div class="radio-btn">🤖 SSH Agent</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>私钥路径 <span class="required">*</span></label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input" value="~/.ssh/id_rsa_prod" style="flex:1">
+            <button class="btn btn-secondary">浏览…</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>私钥密码短语（可选）</label>
+          <input class="form-input" type="password" placeholder="留空则无密码">
+        </div>
+
+        <div class="form-row">
+          <label>跳板机（ProxyJump）</label>
+          <input class="form-input" placeholder="user@jumphost:22（可选）">
+        </div>
+
+        <div class="form-row">
+          <label>连接超时（秒）</label>
+          <input class="form-input" value="30" style="width:120px;">
+        </div>
+
+        <div class="form-row" style="display:flex;align-items:center;gap:10px;">
+          <label style="margin-bottom:0">校验 known_hosts</label>
+          <div style="width:40px;height:20px;background:var(--accent);border-radius:10px;position:relative;cursor:pointer;flex-shrink:0;">
+            <div style="position:absolute;right:3px;top:3px;width:14px;height:14px;background:#fff;border-radius:50%;"></div>
+          </div>
+          <span style="color:var(--text-muted);font-size:11px;">已开启</span>
+        </div>
+
+        <!-- Test result -->
+        <div class="test-result ok">
+          <span>✅</span>
+          <span>连接测试成功 · SSH 握手 127ms · SQLite 3.46.1 已检测到</span>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="showToast('连接配置已保存')">💾 保存</button>
+          <button class="btn btn-success" onclick="showToast('正在连接...')">▶ 连接</button>
+          <button class="btn btn-secondary">🧪 测试连接</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 3: SQL Editor
+     ============================================================ -->
+<div class="page" id="page-sql">
+  <div class="app-shell">
+    <div class="menubar">
+      <span class="logo">Remote<span>SQLite</span></span>
+      <span class="menu-item">文件</span>
+      <span class="menu-item">连接</span>
+      <span class="menu-item">视图</span>
+      <span class="menu-item">工具</span>
+      <span class="menu-item">帮助</span>
+      <div class="spacer"></div>
+      <div class="status-dot"></div>
+      <span class="status-text">prod-server · app.db</span>
+    </div>
+    <div class="sql-main">
+      <!-- SQL Sidebar -->
+      <div class="sql-sidebar">
+        <div class="panel-header" style="font-size:11px;">历史记录</div>
+        <div style="overflow-y:auto;flex:1;">
+          <div class="history-item">
+            <span class="ts">14:15</span>SELECT * FROM users LIMIT 100
+          </div>
+          <div class="history-item" style="background:var(--selected);">
+            <span class="ts">14:12</span>SELECT id, username, email FROM users WHERE status='active'
+          </div>
+          <div class="history-item">
+            <span class="ts">14:08</span>UPDATE users SET score=score+10 WHERE id=2
+          </div>
+          <div class="history-item">
+            <span class="ts">13:55</span>SELECT COUNT(*) FROM orders GROUP BY status
+          </div>
+          <div class="history-item">
+            <span class="ts">13:40</span>CREATE INDEX idx_email ON users(email)
+          </div>
+          <div class="history-item">
+            <span class="ts">10:22</span>SELECT u.username, COUNT(o.id) as cnt FROM users u LEFT JOIN orders o ON u.id=o.user_id GROUP BY u.id
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);">
+          <div class="panel-header" style="font-size:11px;">SQL 片段</div>
+          <div class="history-item">📌 查询活跃用户</div>
+          <div class="history-item">📌 统计订单数量</div>
+          <div class="history-item">📌 JOIN 用户订单</div>
+          <div class="history-item" style="color:var(--accent); padding:6px 10px; cursor:pointer;">＋ 保存当前 SQL</div>
+        </div>
+      </div>
+
+      <!-- Editor area -->
+      <div class="sql-editor-area">
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <button class="tool-btn primary" onclick="showToast('SQL 执行成功 · 7 行 · 3ms')">▶ 执行  <kbd style="font-size:10px;opacity:0.7;">Ctrl+↵</kbd></button>
+          <button class="tool-btn" onclick="showToast('SQL 已格式化')">⬡ 格式化</button>
+          <button class="tool-btn">💾 保存</button>
+          <button class="tool-btn">📂 打开</button>
+          <div class="tool-sep"></div>
+          <select style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:5px;font-size:12px;font-family:inherit;">
+            <option>app.db</option>
+            <option>analytics.db</option>
+          </select>
+        </div>
+
+        <!-- Code editor -->
+        <div class="editor-container" style="flex:1; position:relative;">
+          <pre class="sql-code" style="display:flex;gap:0;">
+<span class="line-nums">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11</span><span style="color:var(--text);"><span class="cmt">-- 查询活跃用户及其订单数量</span>
+<span class="kw">SELECT</span>
+    u.id,
+    u.username,
+    u.email,
+    u.role,
+    <span class="fn">COUNT</span>(o.id) <span class="kw">AS</span> order_count,
+    <span class="fn">SUM</span>(o.total) <span class="kw">AS</span> total_amount
+<span class="kw">FROM</span> <span class="tbl">users</span> u
+<span class="kw2">LEFT JOIN</span> <span class="tbl">orders</span> o <span class="kw">ON</span> u.id <span class="kw">=</span> o.user_id
+<span class="kw">WHERE</span> u.status <span class="kw">=</span> <span class="str">'active'</span>
+</span></pre>
+          <pre class="sql-code cursor-line" style="display:flex;gap:0;margin-left:-12px;padding-left:12px;">
+<span class="line-nums" style="display:none">12</span><span style="color:var(--text);"><span class="kw">GROUP BY</span> u.id
+</span></pre>
+          <pre class="sql-code" style="display:flex;gap:0;">
+<span class="line-nums">13
+14
+</span><span style="color:var(--text);"><span class="kw">ORDER BY</span> total_amount <span class="kw">DESC</span>
+<span class="kw">LIMIT</span> <span class="num">50</span><span style="background:rgba(124,106,247,0.4);border-radius:2px;padding:0 1px;">|</span></span></pre>
+
+          <!-- Autocomplete popup -->
+          <div class="autocomplete">
+            <div style="padding:4px 10px 4px;font-size:10px;color:var(--text-muted);border-bottom:1px solid var(--border);">自动补全</div>
+            <div class="autocomplete-item selected">
+              <span>GROUP BY</span>
+              <span class="ac-type ac-kw">关键字</span>
+            </div>
+            <div class="autocomplete-item">
+              <span>GROUP_CONCAT</span>
+              <span class="ac-type ac-kw">函数</span>
+            </div>
+            <div class="autocomplete-item">
+              <span>users</span>
+              <span class="ac-type ac-tbl">表</span>
+            </div>
+            <div class="autocomplete-item">
+              <span>user_id</span>
+              <span class="ac-type ac-col">列</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result panel -->
+        <div class="result-panel">
+          <div class="result-tabs">
+            <div class="result-tab active">结果集 (7)</div>
+            <div class="result-tab">消息</div>
+            <div class="result-tab">执行计划</div>
+          </div>
+          <div class="exec-info">
+            <span class="ok">✅ 执行成功</span>
+            <span class="info">⏱ 3ms</span>
+            <span class="info">📋 7 行返回</span>
+            <span class="info">↓ 影响行数: 0</span>
+          </div>
+          <div class="result-content">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>id</th>
+                  <th>username</th>
+                  <th>email</th>
+                  <th>role</th>
+                  <th>order_count</th>
+                  <th>total_amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="row-num">1</td>
+                  <td class="pk">1</td>
+                  <td>alice_w</td>
+                  <td>alice@example.com</td>
+                  <td>admin</td>
+                  <td>42</td>
+                  <td>18,956.00</td>
+                </tr>
+                <tr>
+                  <td class="row-num">2</td>
+                  <td class="pk">5</td>
+                  <td>eve_ops</td>
+                  <td>eve@devops.net</td>
+                  <td>operator</td>
+                  <td>31</td>
+                  <td>12,400.00</td>
+                </tr>
+                <tr>
+                  <td class="row-num">3</td>
+                  <td class="pk">2</td>
+                  <td>bob_zhang</td>
+                  <td>bob@example.com</td>
+                  <td>user</td>
+                  <td>18</td>
+                  <td>7,230.50</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Status bar -->
+        <div class="statusbar">
+          <div class="item ok"><span>●</span><span class="val">prod-server</span></div>
+          <div class="item"><span>🗄</span><span class="val">app.db</span></div>
+          <div class="item"><span>行</span><span class="val">14</span></div>
+          <div class="item"><span>列</span><span class="val">5</span></div>
+          <div class="spacer"></div>
+          <div class="item"><span>UTF-8</span></div>
+          <div class="item"><span>SQLite 3.46.1</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 4: Visual Table Builder
+     ============================================================ -->
+<div class="page" id="page-builder">
+  <div class="app-shell">
+    <div class="menubar">
+      <span class="logo">Remote<span>SQLite</span></span>
+      <span class="menu-item">文件</span>
+      <span class="menu-item">连接</span>
+      <span class="menu-item">视图</span>
+      <span class="menu-item">工具</span>
+      <span class="menu-item">帮助</span>
+      <div class="spacer"></div>
+      <div class="status-dot"></div>
+      <span class="status-text">prod-server · app.db</span>
+    </div>
+    <div class="builder-page">
+      <!-- Left: table designer -->
+      <div class="builder-left">
+        <div class="builder-toolbar">
+          <span style="color:var(--text-muted);font-size:12px;">表名</span>
+          <input class="table-name-input" value="user_profiles" spellcheck="false">
+          <div style="flex:1;"></div>
+          <button class="tool-btn" onclick="showToast('DDL 已复制到剪贴板')">📋 复制 DDL</button>
+          <button class="tool-btn primary" onclick="showToast('表 user_profiles 创建成功！')">▶ 执行创建</button>
+        </div>
+
+        <!-- Columns table -->
+        <div class="col-table-area">
+          <table class="col-table">
+            <thead>
+              <tr>
+                <th style="width:30px"></th>
+                <th style="width:40px">#</th>
+                <th style="width:160px">列名</th>
+                <th style="width:110px">数据类型</th>
+                <th>约束</th>
+                <th style="width:140px">默认值</th>
+                <th style="width:40px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="drag-handle">⣿</span></td>
+                <td style="color:var(--text-muted);font-size:11px;text-align:center;">1</td>
+                <td><input class="col-input" value="id"></td>
+                <td>
+                  <select class="type-select">
+                    <option selected>INTEGER</option>
+                    <option>TEXT</option>
+                    <option>REAL</option>
+                    <option>BLOB</option>
+                    <option>NUMERIC</option>
+                  </select>
+                </td>
+                <td>
+                  <div class="constraint-checks">
+                    <span class="chk-badge pk">PK</span>
+                    <span class="chk-badge ai">AI</span>
+                    <span class="chk-badge nn">NN</span>
+                    <span class="chk-badge uq off">UQ</span>
+                  </div>
+                </td>
+                <td><input class="col-input" placeholder="（自动）" disabled style="opacity:0.4;"></td>
+                <td><button class="row-del-btn">×</button></td>
+              </tr>
+              <tr>
+                <td><span class="drag-handle">⣿</span></td>
+                <td style="color:var(--text-muted);font-size:11px;text-align:center;">2</td>
+                <td><input class="col-input" value="user_id"></td>
+                <td>
+                  <select class="type-select">
+                    <option selected>INTEGER</option>
+                    <option>TEXT</option>
+                  </select>
+                </td>
+                <td>
+                  <div class="constraint-checks">
+                    <span class="chk-badge pk off">PK</span>
+                    <span class="chk-badge ai off">AI</span>
+                    <span class="chk-badge nn">NN</span>
+                    <span class="chk-badge uq uq">UQ</span>
+                    <span class="fk-badge" title="外键 → users.id">🔗FK</span>
+                  </div>
+                </td>
+                <td><input class="col-input" placeholder="—"></td>
+                <td><button class="row-del-btn">×</button></td>
+              </tr>
+              <tr class="drag-row">
+                <td><span class="drag-handle">⣿</span></td>
+                <td style="color:var(--text-muted);font-size:11px;text-align:center;">3</td>
+                <td><input class="col-input" value="display_name"></td>
+                <td>
+                  <select class="type-select" style="color:var(--green);">
+                    <option>INTEGER</option>
+                    <option selected>TEXT</option>
+                  </select>
+                </td>
+                <td>
+                  <div class="constraint-checks">
+                    <span class="chk-badge pk off">PK</span>
+                    <span class="chk-badge ai off">AI</span>
+                    <span class="chk-badge nn">NN</span>
+                    <span class="chk-badge uq off">UQ</span>
+                  </div>
+                </td>
+                <td><input class="col-input" placeholder="—"></td>
+                <td><button class="row-del-btn">×</button></td>
+              </tr>
+              <tr>
+                <td><span class="drag-handle">⣿</span></td>
+                <td style="color:var(--text-muted);font-size:11px;text-align:center;">4</td>
+                <td><input class="col-input" value="avatar_url"></td>
+                <td>
+                  <select class="type-select" style="color:var(--green);">
+                    <option>INTEGER</option>
+                    <option selected>TEXT</option>
+                  </select>
+                </td>
+                <td>
+                  <div class="constraint-checks">
+                    <span class="chk-badge pk off">PK</span>
+                    <span class="chk-badge ai off">AI</span>
+                    <span class="chk-badge nn off">NN</span>
+                    <span class="chk-badge uq off">UQ</span>
+                  </div>
+                </td>
+                <td><input class="col-input" placeholder="NULL"></td>
+                <td><button class="row-del-btn">×</button></td>
+              </tr>
+              <tr>
+                <td><span class="drag-handle">⣿</span></td>
+                <td style="color:var(--text-muted);font-size:11px;text-align:center;">5</td>
+                <td><input class="col-input" value="bio"></td>
+                <td>
+                  <select class="type-select" style="color:var(--green);">
+                    <option>INTEGER</option>
+                    <option selected>TEXT</option>
+                  </select>
+                </td>
+                <td>
+                  <div class="constraint-checks">
+                    <span class="chk-badge pk off">PK</span>
+                    <span class="chk-badge ai off">AI</span>
+                    <span class="chk-badge nn off">NN</span>
+                    <span class="chk-badge uq off">UQ</span>
+                  </div>
+                </td>
+                <td><input class="col-input" placeholder="NULL"></td>
+                <td><button class="row-del-btn">×</button></td>
+              </tr>
+              <tr>
+                <td><span class="drag-handle">⣿</span></td>
+                <td style="color:var(--text-muted);font-size:11px;text-align:center;">6</td>
+                <td><input class="col-input" value="created_at"></td>
+                <td>
+                  <select class="type-select" style="color:var(--green);">
+                    <option>INTEGER</option>
+                    <option selected>TEXT</option>
+                  </select>
+                </td>
+                <td>
+                  <div class="constraint-checks">
+                    <span class="chk-badge pk off">PK</span>
+                    <span class="chk-badge ai off">AI</span>
+                    <span class="chk-badge nn">NN</span>
+                    <span class="chk-badge uq off">UQ</span>
+                  </div>
+                </td>
+                <td><input class="col-input" value="CURRENT_TIMESTAMP"></td>
+                <td><button class="row-del-btn">×</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="add-col-btn" onclick="showToast('已添加新列')">
+            ＋ 添加列
+          </div>
+
+          <!-- FK editor section -->
+          <div style="padding:0 0 12px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">外键约束</div>
+            <div style="background:var(--panel-bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;">
+              <div style="display:flex;align-items:center;gap:10px;color:var(--text-dim);">
+                <span style="color:var(--orange);">🔗</span>
+                <span style="font-family:Consolas;color:var(--blue);">user_id</span>
+                <span>→</span>
+                <span style="font-family:Consolas;color:var(--orange);">users</span>
+                <span style="font-family:Consolas;color:var(--text-dim);">(id)</span>
+                <span style="background:rgba(249,226,175,0.15);color:var(--yellow);padding:2px 7px;border-radius:4px;font-size:10px;">ON DELETE CASCADE</span>
+                <span style="background:rgba(137,180,250,0.15);color:var(--blue);padding:2px 7px;border-radius:4px;font-size:10px;">ON UPDATE NO ACTION</span>
+                <div style="flex:1;"></div>
+                <button class="row-del-btn">×</button>
+              </div>
+            </div>
+            <div style="color:var(--accent);font-size:12px;margin-top:8px;cursor:pointer;">＋ 添加外键</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: DDL preview + index -->
+      <div class="builder-right">
+        <div class="panel-header">
+          <span>📄 DDL 预览</span>
+          <div class="spacer"></div>
+          <span style="font-size:10px;color:var(--green);">● 实时同步</span>
+        </div>
+        <div class="ddl-preview">
+<span class="kw">CREATE TABLE</span> <span class="tbl">user_profiles</span> (
+  <span class="col">id</span>           <span class="kw2">INTEGER</span>  <span class="kw">PRIMARY KEY</span>
+                           <span class="kw">AUTOINCREMENT</span>,
+  <span class="col">user_id</span>      <span class="kw2">INTEGER</span>  <span class="kw">NOT NULL</span> <span class="kw">UNIQUE</span>,
+  <span class="col">display_name</span> <span class="kw2">TEXT</span>     <span class="kw">NOT NULL</span>,
+  <span class="col">avatar_url</span>   <span class="kw2">TEXT</span>,
+  <span class="col">bio</span>          <span class="kw2">TEXT</span>,
+  <span class="col">created_at</span>   <span class="kw2">TEXT</span>     <span class="kw">NOT NULL</span>
+               <span class="kw">DEFAULT</span> <span class="fn">CURRENT_TIMESTAMP</span>,
+
+  <span class="kw">FOREIGN KEY</span> (<span class="col">user_id</span>)
+    <span class="kw">REFERENCES</span> <span class="tbl">users</span> (<span class="col">id</span>)
+    <span class="kw">ON DELETE</span> <span class="kw2">CASCADE</span>
+    <span class="kw">ON UPDATE</span> <span class="kw2">NO ACTION</span>
+)<span class="cmt">;</span>
+        </div>
+
+        <!-- Index section -->
+        <div class="index-section">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">索引</div>
+          <div class="index-row">
+            <span style="color:var(--accent2);">⚡</span>
+            <span class="idx-name">idx_profiles_user_id</span>
+            <span class="idx-cols">(user_id)</span>
+            <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(166,227,161,0.12);color:var(--green);">UNIQUE</span>
+            <div style="flex:1;"></div>
+            <button class="row-del-btn">×</button>
+          </div>
+          <div class="index-row">
+            <span style="color:var(--accent2);">⚡</span>
+            <span class="idx-name">idx_profiles_name</span>
+            <span class="idx-cols">(display_name)</span>
+            <div style="flex:1;"></div>
+            <button class="row-del-btn">×</button>
+          </div>
+          <div style="color:var(--accent);font-size:12px;margin-top:8px;cursor:pointer;" onclick="showToast('打开索引创建对话框')">＋ 添加索引</div>
+        </div>
+
+        <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;">
+          <button class="btn btn-primary" style="flex:1;" onclick="showToast('表 user_profiles 创建成功！')">▶ 执行创建</button>
+          <button class="btn btn-secondary" onclick="showToast('DDL 已复制')">📋</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modals ===== -->
+<!-- Delete confirm -->
+<div class="modal-overlay hidden" id="del-modal">
+  <div class="modal">
+    <div class="modal-title warn">⚠️ 确认删除</div>
+    <div class="modal-body">
+      即将删除 <strong>2 行</strong> 数据，此操作<strong>不可撤销</strong>。<br><br>
+      将执行：<code style="background:rgba(243,139,168,0.1);padding:2px 6px;border-radius:3px;font-family:Consolas;color:var(--red);">DELETE FROM users WHERE id IN (1, 2)</code>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('del-modal')">取消</button>
+      <button class="btn btn-danger" onclick="hideModal('del-modal');showToast('已删除 2 行')">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add row modal -->
+<div class="modal-overlay hidden" id="add-modal">
+  <div class="modal" style="min-width:420px;">
+    <div class="modal-title">➕ 新增行 — users</div>
+    <div style="margin-bottom:16px;">
+      <div class="form-row">
+        <label>username <span class="required">*</span></label>
+        <input class="form-input" placeholder="请输入用户名">
+      </div>
+      <div class="form-row">
+        <label>email <span class="required">*</span></label>
+        <input class="form-input" placeholder="example@email.com">
+      </div>
+      <div class="form-row">
+        <label>role</label>
+        <select class="form-input">
+          <option>user</option>
+          <option>admin</option>
+          <option>operator</option>
+        </select>
+      </div>
+      <div class="form-row" style="margin-bottom:0;">
+        <label>status</label>
+        <select class="form-input">
+          <option>active</option>
+          <option>pending</option>
+          <option>banned</option>
+        </select>
+      </div>
+    </div>
+    <div style="background:var(--input-bg);border-radius:6px;padding:8px 12px;font-family:Consolas;font-size:11px;color:var(--text-muted);margin-bottom:16px;">
+      INSERT INTO users (username, email, role, status) VALUES (?, ?, ?, ?);
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('add-modal')">取消</button>
+      <button class="btn btn-primary" onclick="hideModal('add-modal');showToast('新行已插入')">插入</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast hidden" id="toast">
+  <span>✅</span>
+  <span id="toast-msg">操作成功</span>
+</div>
+
+<script>
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.page-nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  function showModal(id) {
+    document.getElementById(id).classList.remove('hidden');
+  }
+
+  function hideModal(id) {
+    document.getElementById(id).classList.add('hidden');
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    document.getElementById('toast-msg').textContent = msg;
+    t.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.add('hidden'), 2500);
+  }
+
+  // Close modal on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', function(e) {
+      if (e.target === this) this.classList.add('hidden');
+    });
+  });
+
+  // Constraint badge toggle
+  document.querySelectorAll('.chk-badge').forEach(badge => {
+    badge.addEventListener('click', function() {
+      this.classList.toggle('off');
+    });
+  });
+</script>
+</body>
+</html>

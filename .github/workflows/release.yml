@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+            artifact_name: RemoteSQLite-win64
+            build_cmd: npm run electron:build:win
+            artifact_pattern: '*.exe'
+          - os: ubuntu-latest
+            name: Linux
+            artifact_name: RemoteSQLite-linux-x64
+            build_cmd: npm run electron:build:linux
+            artifact_pattern: '*.AppImage,*.deb,*.rpm,*.tar.gz'
+          - os: macos-latest
+            name: macOS
+            artifact_name: RemoteSQLite-mac
+            build_cmd: npm run electron:build:mac
+            artifact_pattern: '*.dmg'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('src/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        working-directory: ./src
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        working-directory: ./src
+        run: ${{ matrix.build_cmd }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.actor }}
+
+      - name: Upload Release Asset (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            src/release/win-unpacked/*.exe
+            src/release/RemoteSQLite-*-win*.zip
+            src/release/RemoteSQLite-*-Setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Asset (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            src/release/*.AppImage
+            src/release/*.deb
+            src/release/*.rpm
+            src/release/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Asset (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            src/release/*.dmg
+            src/release/mac/*.app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: src/release/**/*
+          retention-days: 7
+
+  release-pr:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List files
+        run: ls -la artifacts/
+
+      - name: Generate release notes
+        run: |
+          echo "## Installation Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Windows" >> $GITHUB_STEP_SUMMARY
+          echo "- Download the `.exe` installer or `.zip` portable version" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Linux" >> $GITHUB_STEP_SUMMARY
+          echo "- AppImage: Run directly without installation" >> $GITHUB_STEP_SUMMARY
+          echo "- DEB: For Debian/Ubuntu" >> $GITHUB_STEP_SUMMARY
+          echo "- RPM: For Fedora/RHEL/CentOS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### macOS" >> $GITHUB_STEP_SUMMARY
+          echo "- DMG: Mount and drag to Applications" >> $GITHUB_STEP_SUMMARY

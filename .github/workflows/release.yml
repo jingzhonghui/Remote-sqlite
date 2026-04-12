@@ -64,7 +64,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./src
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build application
         working-directory: ./src

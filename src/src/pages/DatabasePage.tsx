@@ -8,6 +8,9 @@ import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
 import { Tooltip } from '../components/Tooltip'
 
+// 定义排序状态
+type SortDirection = 'asc' | 'desc' | null
+
 // 定义打开的表标签页类型
 interface TableTab {
   id: string
@@ -20,6 +23,8 @@ interface TableTab {
   loading: boolean
   selectedRows: Set<number>
   columnWidths: Record<string, number>
+  sortColumn: string | null
+  sortDirection: SortDirection
 }
 
 export default function DatabasePage() {
@@ -145,6 +150,8 @@ export default function DatabasePage() {
         loading: true,
         selectedRows: new Set(),
         columnWidths: {},
+        sortColumn: null,
+        sortDirection: null,
       }
       setOpenTabs(prev => [...prev, newTab])
       setActiveTabId(newTab.id)
@@ -618,6 +625,66 @@ export default function DatabasePage() {
     setTimeout(() => setCopiedCell(null), 1500)
   }
 
+  // 双击表头排序
+  const handleSort = (column: string) => {
+    if (!activeTabId) return
+    setOpenTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId) return tab
+      
+      // 排序逻辑：asc -> desc -> null
+      let newDirection: SortDirection = null
+      if (tab.sortColumn === column) {
+        if (tab.sortDirection === 'asc') {
+          newDirection = 'desc'
+        } else if (tab.sortDirection === 'desc') {
+          newDirection = null
+        } else {
+          newDirection = 'asc'
+        }
+      } else {
+        newDirection = 'asc'
+      }
+      
+      return {
+        ...tab,
+        sortColumn: newDirection ? column : null,
+        sortDirection: newDirection,
+      }
+    }))
+  }
+
+  // 获取排序后的数据
+  const getSortedData = () => {
+    if (!tableData || !activeTab) return tableData
+    if (!activeTab.sortColumn || !activeTab.sortDirection) return tableData
+    
+    const { sortColumn, sortDirection } = activeTab
+    const sortedRows = [...tableData.rows].sort((a, b) => {
+      const aVal = a[sortColumn]
+      const bVal = b[sortColumn]
+      
+      // 处理 null 值
+      if (aVal === null && bVal === null) return 0
+      if (aVal === null) return 1
+      if (bVal === null) return -1
+      
+      // 数字比较
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
+      }
+      
+      // 字符串比较
+      const aStr = String(aVal)
+      const bStr = String(bVal)
+      const cmp = aStr.localeCompare(bStr)
+      return sortDirection === 'asc' ? cmp : -cmp
+    })
+    
+    return { ...tableData, rows: sortedRows }
+  }
+
+  const sortedTableData = getSortedData()
+
   if (!activeConnection) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-text-muted">
@@ -913,20 +980,37 @@ export default function DatabasePage() {
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  {tableData.columns.map((col) => (
-                    <th key={col} className="relative">
-                      <span className="block truncate pr-4">{col}</span>
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors"
-                        onMouseDown={(e) => handleResizeStart(e, col)}
-                      />
-                    </th>
-                  ))}
+                  {tableData.columns.map((col) => {
+                    const isSorted = activeTab?.sortColumn === col
+                    const sortDir = activeTab?.sortDirection
+                    return (
+                      <th key={col} className="relative">
+                        <div 
+                          className="flex items-center gap-1 cursor-pointer select-none"
+                          onDoubleClick={() => handleSort(col)}
+                        >
+                          <span className="block truncate">{col}</span>
+                          {isSorted && sortDir && (
+                            <span className="text-accent flex-shrink-0">
+                              {sortDir === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                          {!isSorted && (
+                            <span className="text-text-muted/30 flex-shrink-0 text-[8px]">⇅</span>
+                          )}
+                        </div>
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors"
+                          onMouseDown={(e) => handleResizeStart(e, col)}
+                        />
+                      </th>
+                    )
+                  })}
                   <th className="w-20 min-w-[80px]">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {tableData.rows.map((row, idx) => (
+                {sortedTableData?.rows.map((row, idx) => (
                   <tr 
                     key={row.id || idx} 
                     className={`group transition-all ${selectedRows.has(idx) ? 'bg-selected/50' : ''}`}
@@ -939,7 +1023,7 @@ export default function DatabasePage() {
                         onChange={() => toggleRowSelection(idx)}
                       />
                     </td>
-                    {tableData.columns.map((col) => {
+                    {sortedTableData?.columns.map((col) => {
                       const cellValue = row[col]
                       const displayValue = cellValue === null ? (
                         <span className="text-text-muted italic">NULL</span>

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { 
-  Database, Table, Search, RefreshCw, Plus, Trash2, Edit3, 
+  Database, Table, Search, RefreshCw, Plus, Trash2, Edit3, Copy, Check,
   ChevronRight, ChevronDown, FileSpreadsheet, Filter, Download, Loader2, AlertCircle,
   WifiOff, Server, X, FolderOpen
 } from 'lucide-react'
@@ -608,6 +608,16 @@ export default function DatabasePage() {
   // 获取列宽
   const getColumnWidth = (column: string) => activeTab?.columnWidths[column] || 150
 
+  // 复制单元格数据
+  const [copiedCell, setCopiedCell] = useState<string | null>(null)
+  
+  const copyCell = (value: any, cellKey: string) => {
+    const text = value === null ? 'NULL' : String(value)
+    navigator.clipboard.writeText(text)
+    setCopiedCell(cellKey)
+    setTimeout(() => setCopiedCell(null), 1500)
+  }
+
   if (!activeConnection) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-text-muted">
@@ -937,12 +947,27 @@ export default function DatabasePage() {
                         String(cellValue)
                       )
                       const tooltipContent = cellValue === null ? 'NULL' : String(cellValue)
+                      const cellKey = `${idx}-${col}-${String(cellValue)}`
+                      const isCopied = copiedCell === cellKey
                       
                       return (
-                        <td key={col} className="truncate max-w-[300px]">
-                          <Tooltip content={tooltipContent}>
-                            {displayValue}
-                          </Tooltip>
+                        <td key={col} className="truncate max-w-[300px] relative group/cell">
+                          <div className="flex items-center pr-6">
+                            <Tooltip content={tooltipContent}>
+                              {displayValue}
+                            </Tooltip>
+                          </div>
+                          <button
+                            onClick={() => copyCell(cellValue, cellKey)}
+                            className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded transition-all ${isCopied ? 'text-success opacity-100' : 'text-warning opacity-0 group-hover/cell:opacity-100 hover:bg-hover'}`}
+                            title="复制"
+                          >
+                            {isCopied ? (
+                              <Check className="w-3.5 h-3.5" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                         </td>
                       )
                     })}
@@ -968,6 +993,8 @@ export default function DatabasePage() {
                 ))}
               </tbody>
             </table>
+
+
           ) : null}
         </div>
 

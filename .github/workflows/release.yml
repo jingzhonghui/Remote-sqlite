@@ -20,17 +20,17 @@ jobs:
           - os: windows-latest
             name: Windows
             artifact_name: RemoteSQLite-win64
-            build_cmd: npm run electron:build:win
+            build_cmd: pnpm run electron:build:win
             artifact_pattern: '*.exe'
           - os: ubuntu-latest
             name: Linux
             artifact_name: RemoteSQLite-linux-x64
-            build_cmd: npm run electron:build:linux
+            build_cmd: pnpm run electron:build:linux
             artifact_pattern: '*.AppImage,*.deb,*.rpm,*.tar.gz'
           - os: macos-latest
             name: macOS
             artifact_name: RemoteSQLite-mac
-            build_cmd: npm run electron:build:mac
+            build_cmd: pnpm run electron:build:mac
             artifact_pattern: '*.dmg'
 
     steps:
@@ -40,7 +40,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24.14.1'
           cache: 'npm'
           cache-dependency-path: src/pnpm-lock.yaml
 

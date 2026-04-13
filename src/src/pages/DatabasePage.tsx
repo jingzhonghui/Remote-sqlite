@@ -884,7 +884,14 @@ export default function DatabasePage() {
               <RefreshCw className="w-6 h-6 animate-spin" />
             </div>
           ) : tableData ? (
-            <table className="w-full text-xs">
+            <table className="w-full text-xs table-fixed">
+              <colgroup>
+                <col className="w-8 min-w-[32px]" />
+                {tableData.columns.map((col) => (
+                  <col key={col} style={{ width: getColumnWidth(col), minWidth: '60px' }} />
+                ))}
+                <col className="w-20 min-w-[80px]" />
+              </colgroup>
               <thead className="sticky top-0 z-10">
                 <tr>
                   <th className="w-8 min-w-[32px]">
@@ -896,7 +903,7 @@ export default function DatabasePage() {
                     />
                   </th>
                   {tableData.columns.map((col) => (
-                    <th key={col} className="relative" style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }}>
+                    <th key={col} className="relative">
                       <span className="block truncate pr-4">{col}</span>
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors"
@@ -922,7 +929,7 @@ export default function DatabasePage() {
                       />
                     </td>
                     {tableData.columns.map((col) => (
-                      <td key={col} style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }} className="truncate max-w-[300px]">
+                      <td key={col} className="truncate max-w-[300px]">
                         {row[col] === null ? (
                           <span className="text-text-muted italic">NULL</span>
                         ) : (
@@ -930,7 +937,7 @@ export default function DatabasePage() {
                         )}
                       </td>
                     ))}
-                    <td className="min-w-[80px]">
+                    <td>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                           onClick={() => openEditModal(row)}

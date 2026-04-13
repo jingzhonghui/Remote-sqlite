@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
+import { Tooltip } from '../components/Tooltip'
 
 // 定义打开的表标签页类型
 interface TableTab {
@@ -928,15 +929,23 @@ export default function DatabasePage() {
                         onChange={() => toggleRowSelection(idx)}
                       />
                     </td>
-                    {tableData.columns.map((col) => (
-                      <td key={col} className="truncate max-w-[300px]">
-                        {row[col] === null ? (
-                          <span className="text-text-muted italic">NULL</span>
-                        ) : (
-                          String(row[col])
-                        )}
-                      </td>
-                    ))}
+                    {tableData.columns.map((col) => {
+                      const cellValue = row[col]
+                      const displayValue = cellValue === null ? (
+                        <span className="text-text-muted italic">NULL</span>
+                      ) : (
+                        String(cellValue)
+                      )
+                      const tooltipContent = cellValue === null ? 'NULL' : String(cellValue)
+                      
+                      return (
+                        <td key={col} className="truncate max-w-[300px]">
+                          <Tooltip content={tooltipContent}>
+                            {displayValue}
+                          </Tooltip>
+                        </td>
+                      )
+                    })}
                     <td>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 

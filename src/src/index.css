@@ -25,6 +25,7 @@
   --input-bg: #2a2a45;
   --header-bg: #16162a;
   --toolbar-bg: #1a1a30;
+  --tooltip-bg: #45455a;
   
   /* 拟态化阴影 - 深色 */
   --shadow-light: rgba(255, 255, 255, 0.05);
@@ -58,6 +59,7 @@
   --input-bg: #e0e0e4;
   --header-bg: #dcdce0;
   --toolbar-bg: #e0e0e4;
+  --tooltip-bg: #ffffff;
   
   /* 拟态化阴影 - 浅色 */
   --shadow-light: rgba(255, 255, 255, 0.9);

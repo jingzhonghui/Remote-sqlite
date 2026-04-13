@@ -63,11 +63,16 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Set version from tag
-        run: |
-          TAG_VERSION=${{ github.ref_name }}
-          echo "Setting version to $TAG_VERSION"
-          cd src
-          sed -i "s/\"version\": \".*\"/\"version\": \"$TAG_VERSION\"/" package.json
+        run: node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.version = process.env.TAG_VERSION.replace(/^v/, '');
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          console.log('Version set to:', pkg.version);
+        "
+        working-directory: ./src
+        env:
+          TAG_VERSION: ${{ github.ref_name }}
 
       - name: Install dependencies
         working-directory: ./src

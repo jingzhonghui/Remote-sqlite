@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { 
   Database, Table, Search, RefreshCw, Plus, Trash2, Edit3, 
   ChevronRight, ChevronDown, FileSpreadsheet, Filter, Download, Loader2, AlertCircle,
@@ -7,13 +7,26 @@ import {
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
 
+// 定义打开的表标签页类型
+interface TableTab {
+  id: string
+  tableName: string
+  data: {
+    columns: string[]
+    rows: any[]
+    totalCount?: number
+  } | null
+  loading: boolean
+  selectedRows: Set<number>
+  columnWidths: Record<string, number>
+}
+
 export default function DatabasePage() {
   const { 
     connectionPool, 
     activeConnectionId, 
     databases,
     currentDatabase, 
-    selectedTable, 
     setSelectedTable,
     setCurrentDatabase,
     addDatabase,
@@ -21,13 +34,10 @@ export default function DatabasePage() {
   } = useAppStore()
   
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
-  const [tableData, setTableData] = useState<{ columns: string[]; rows: any[]; totalCount?: number } | null>(null)
-  const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingRow, setEditingRow] = useState<any>(null)
   const [editFormData, setEditFormData] = useState<Record<string, any>>({})
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set()) // 选中的行索引
   const [exporting, setExporting] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv')
@@ -37,17 +47,30 @@ export default function DatabasePage() {
   const [dbPath, setDbPath] = useState('')
   const [loadingTables, setLoadingTables] = useState(false)
   const [dbPathError, setDbPathError] = useState('')
-  
+
+  // 多标签页状态
+  const [openTabs, setOpenTabs] = useState<TableTab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+
   // 获取当前活动连接
   const activeConnection = connectionPool.connections.find(c => c.id === activeConnectionId)
   
   // 过滤当前连接的数据库
   const currentConnectionDatabases = databases.filter(db => db.connectionId === activeConnectionId)
 
+  // 获取当前活动的标签页
+  const activeTab = openTabs.find(tab => tab.id === activeTabId)
+  const tableData = activeTab?.data || null
+  const selectedRows = activeTab?.selectedRows || new Set()
+
   // 加载表数据
-  const loadTableData = async (tableName: string) => {
+  const loadTableData = async (tableName: string, tabId: string) => {
     if (!activeConnection || !currentDatabase) return
-    setLoading(true)
+    
+    // 更新标签页加载状态
+    setOpenTabs(prev => prev.map(tab => 
+      tab.id === tabId ? { ...tab, loading: true } : tab
+    ))
     
     try {
       // 查询数据（限制1000条）
@@ -70,20 +93,29 @@ export default function DatabasePage() {
           console.error('获取总行数失败:', e)
         }
         
-        setTableData({
-          columns: result.columns,
-          rows: result.rows,
-          totalCount,
-        })
+        // 更新标签页数据
+        setOpenTabs(prev => prev.map(tab => 
+          tab.id === tabId ? { 
+            ...tab, 
+            loading: false,
+            data: {
+              columns: result.columns,
+              rows: result.rows,
+              totalCount,
+            }
+          } : tab
+        ))
       } else {
-        setTableData({ columns: [], rows: [] })
+        setOpenTabs(prev => prev.map(tab => 
+          tab.id === tabId ? { ...tab, loading: false, data: { columns: [], rows: [] } } : tab
+        ))
         console.error('查询失败:', result.message)
       }
     } catch (error) {
       console.error('加载表数据失败:', error)
-      setTableData({ columns: [], rows: [] })
-    } finally {
-      setLoading(false)
+      setOpenTabs(prev => prev.map(tab => 
+        tab.id === tabId ? { ...tab, loading: false, data: { columns: [], rows: [] } } : tab
+      ))
     }
   }
 
@@ -97,10 +129,47 @@ export default function DatabasePage() {
     setExpandedNodes(newExpanded)
   }
 
-  const handleTableClick = (tableName: string) => {
+  // 双击打开表
+  const handleTableDoubleClick = (tableName: string) => {
+    // 检查是否已存在该表的标签页
+    const existingTab = openTabs.find(tab => tab.tableName === tableName)
+    if (existingTab) {
+      setActiveTabId(existingTab.id)
+    } else {
+      // 创建新标签页
+      const newTab: TableTab = {
+        id: `${currentDatabase?.path}:${tableName}:${Date.now()}`,
+        tableName,
+        data: null,
+        loading: true,
+        selectedRows: new Set(),
+        columnWidths: {},
+      }
+      setOpenTabs(prev => [...prev, newTab])
+      setActiveTabId(newTab.id)
+      loadTableData(tableName, newTab.id)
+    }
     setSelectedTable(tableName)
-    setSelectedRows(new Set()) // 切换表格时清空勾选
-    loadTableData(tableName)
+  }
+
+  // 关闭标签页
+  const handleCloseTab = (tabId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setOpenTabs(prev => {
+      const newTabs = prev.filter(tab => tab.id !== tabId)
+      // 如果关闭的是当前活动标签页，切换到另一个
+      if (activeTabId === tabId) {
+        const closedIndex = prev.findIndex(tab => tab.id === tabId)
+        const newActiveTab = newTabs[closedIndex] || newTabs[closedIndex - 1] || null
+        setActiveTabId(newActiveTab?.id || null)
+        if (newActiveTab) {
+          setSelectedTable(newActiveTab.tableName)
+        } else {
+          setSelectedTable(null)
+        }
+      }
+      return newTabs
+    })
   }
 
   // 加载数据库 - 通过弹窗输入路径
@@ -144,9 +213,10 @@ export default function DatabasePage() {
           connectionId: activeConnection.id,
         }
         addDatabase(newDb)
-        // 清空已选中的表
+        // 清空已打开的标签页
+        setOpenTabs([])
+        setActiveTabId(null)
         setSelectedTable(null)
-        setTableData(null)
         // 关闭弹窗并清空输入
         setShowOpenDbModal(false)
         setDbPath('')
@@ -168,15 +238,19 @@ export default function DatabasePage() {
     setShowOpenDbModal(true)
   }
 
+  // 刷新当前标签页
+  const refreshCurrentTab = async () => {
+    if (!activeTab || !currentDatabase) return
+    await loadTableData(activeTab.tableName, activeTab.id)
+  }
+
   // 刷新数据库
   const refreshDatabase = async () => {
     if (!activeConnection || !currentDatabase) return
     await loadDatabaseWithPath(currentDatabase.path)
-    // 刷新后清空勾选
-    setSelectedRows(new Set())
-    // 如果当前有选中的表，也刷新表数据
-    if (selectedTable) {
-      await loadTableData(selectedTable)
+    // 刷新后重新加载当前标签页数据
+    if (activeTab) {
+      await loadTableData(activeTab.tableName, activeTab.id)
     }
   }
 
@@ -226,15 +300,16 @@ export default function DatabasePage() {
     }
   }
 
+  // 删除行
   const handleDeleteRow = async (row: any) => {
-    if (!activeConnection || !currentDatabase || !selectedTable) return
+    if (!activeConnection || !currentDatabase || !activeTab) return
     
     if (!confirm('确定要删除这条记录吗？此操作不可撤销。')) return
     
     try {
       // 获取主键列名（优先使用 id 或 tableName_id）
       const primaryKeyCol = tableData?.columns.find(col => 
-        col === 'id' || col === `${selectedTable}_id` || col.endsWith('_id')
+        col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
       ) || tableData?.columns[0]
       
       if (!primaryKeyCol) {
@@ -242,14 +317,13 @@ export default function DatabasePage() {
         return
       }
       
-      const sql = `DELETE FROM "${selectedTable}" WHERE "${primaryKeyCol}" = ${formatValueForSQL(row[primaryKeyCol])}`
+      const sql = `DELETE FROM "${activeTab.tableName}" WHERE "${primaryKeyCol}" = ${formatValueForSQL(row[primaryKeyCol])}`
       
       const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
       
       if (result.success) {
         // 刷新数据并清空勾选
-        await loadTableData(selectedTable)
-        setSelectedRows(new Set())
+        await loadTableData(activeTab.tableName, activeTab.id)
       } else {
         alert(`删除失败: ${result.message}`)
       }
@@ -260,28 +334,39 @@ export default function DatabasePage() {
 
   // 切换行选中状态
   const toggleRowSelection = (index: number) => {
-    const newSelected = new Set(selectedRows)
-    if (newSelected.has(index)) {
-      newSelected.delete(index)
-    } else {
-      newSelected.add(index)
-    }
-    setSelectedRows(newSelected)
+    if (!activeTab) return
+    setOpenTabs(prev => prev.map(tab => {
+      if (tab.id === activeTabId) {
+        const newSelected = new Set(tab.selectedRows)
+        if (newSelected.has(index)) {
+          newSelected.delete(index)
+        } else {
+          newSelected.add(index)
+        }
+        return { ...tab, selectedRows: newSelected }
+      }
+      return tab
+    }))
   }
 
   // 切换全选状态
   const toggleSelectAll = () => {
-    if (!tableData) return
-    if (selectedRows.size === tableData.rows.length) {
-      setSelectedRows(new Set())
-    } else {
-      setSelectedRows(new Set(tableData.rows.map((_, i) => i)))
-    }
+    if (!tableData || !activeTab) return
+    setOpenTabs(prev => prev.map(tab => {
+      if (tab.id === activeTabId) {
+        if (tab.selectedRows.size === tableData.rows.length) {
+          return { ...tab, selectedRows: new Set() }
+        } else {
+          return { ...tab, selectedRows: new Set(tableData.rows.map((_, i) => i)) }
+        }
+      }
+      return tab
+    }))
   }
 
   // 批量删除选中的行
   const handleBatchDelete = async () => {
-    if (!activeConnection || !currentDatabase || !selectedTable || selectedRows.size === 0) return
+    if (!activeConnection || !currentDatabase || !activeTab || selectedRows.size === 0) return
     
     const count = selectedRows.size
     if (!confirm(`确定要删除选中的 ${count} 条记录吗？此操作不可撤销。`)) return
@@ -289,7 +374,7 @@ export default function DatabasePage() {
     try {
       // 获取主键列名
       const primaryKeyCol = tableData?.columns.find(col => 
-        col === 'id' || col === `${selectedTable}_id` || col.endsWith('_id')
+        col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
       ) || tableData?.columns[0]
       
       if (!primaryKeyCol) {
@@ -302,7 +387,7 @@ export default function DatabasePage() {
       let failedMessages: string[] = []
       
       for (const row of rowsToDelete) {
-        const sql = `DELETE FROM "${selectedTable}" WHERE "${primaryKeyCol}" = ${formatValueForSQL(row[primaryKeyCol])}`
+        const sql = `DELETE FROM "${activeTab.tableName}" WHERE "${primaryKeyCol}" = ${formatValueForSQL(row[primaryKeyCol])}`
         const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
         if (!result.success && result.message) {
           failedMessages.push(result.message)
@@ -310,8 +395,7 @@ export default function DatabasePage() {
       }
       
       // 刷新数据并清空勾选
-      await loadTableData(selectedTable)
-      setSelectedRows(new Set())
+      await loadTableData(activeTab.tableName, activeTab.id)
       
       // 只有失败时才弹出错误提示
       if (failedMessages.length > 0) {
@@ -333,7 +417,7 @@ export default function DatabasePage() {
 
   // 执行导出
   const executeExport = () => {
-    if (!tableData) return
+    if (!tableData || !activeTab) return
     
     setExporting(true)
     
@@ -362,12 +446,12 @@ export default function DatabasePage() {
           }).join(',')
         )
         content = [headers, ...csvRows].join('\n')
-        filename = `${selectedTable || 'export'}_${Date.now()}.csv`
+        filename = `${activeTab.tableName || 'export'}_${Date.now()}.csv`
         mimeType = 'text/csv'
       } else {
         // 生成 JSON
         content = JSON.stringify(rows, null, 2)
-        filename = `${selectedTable || 'export'}_${Date.now()}.json`
+        filename = `${activeTab.tableName || 'export'}_${Date.now()}.json`
         mimeType = 'application/json'
       }
       
@@ -390,9 +474,6 @@ export default function DatabasePage() {
       setExporting(false)
     }
   }
-
-  // 加载表数据时清空选择（通过 useEffect 监听 tableData 变化）
-  // 注意：loadTableData 已经在内部处理清空勾选逻辑
   
   // 格式化值为 SQL 格式
   const formatValueForSQL = (value: any): string => {
@@ -403,13 +484,13 @@ export default function DatabasePage() {
   
   // 保存记录（新增或编辑）
   const handleSaveRow = async () => {
-    if (!activeConnection || !currentDatabase || !selectedTable) return
+    if (!activeConnection || !currentDatabase || !activeTab) return
     
     try {
       if (editingRow) {
         // 编辑模式：执行 UPDATE
         const primaryKeyCol = tableData?.columns.find(col => 
-          col === 'id' || col === `${selectedTable}_id` || col.endsWith('_id')
+          col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
         ) || tableData?.columns[0]
         
         if (!primaryKeyCol) {
@@ -422,13 +503,13 @@ export default function DatabasePage() {
           .map(col => `"${col}" = ${formatValueForSQL(editFormData[col])}`)
           .join(', ')
         
-        const sql = `UPDATE "${selectedTable}" SET ${setClauses} WHERE "${primaryKeyCol}" = ${formatValueForSQL(editingRow[primaryKeyCol])}`
+        const sql = `UPDATE "${activeTab.tableName}" SET ${setClauses} WHERE "${primaryKeyCol}" = ${formatValueForSQL(editingRow[primaryKeyCol])}`
         
         const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
         
         if (result.success) {
           // 刷新表数据
-          await loadTableData(selectedTable)
+          await loadTableData(activeTab.tableName, activeTab.id)
           setShowAddModal(false)
           setEditingRow(null)
           alert('更新成功')
@@ -440,13 +521,13 @@ export default function DatabasePage() {
         const columns = Object.keys(editFormData)
         const values = columns.map(col => formatValueForSQL(editFormData[col])).join(', ')
         
-        const sql = `INSERT INTO "${selectedTable}" ("${columns.join('", "')}") VALUES (${values})`
+        const sql = `INSERT INTO "${activeTab.tableName}" ("${columns.join('", "')}") VALUES (${values})`
         
         const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
         
         if (result.success) {
           // 刷新表数据
-          await loadTableData(selectedTable)
+          await loadTableData(activeTab.tableName, activeTab.id)
           setShowAddModal(false)
           setEditingRow(null)
           alert('新增成功')
@@ -480,6 +561,51 @@ export default function DatabasePage() {
     })
     setEditFormData(initialData)
   }
+
+  // 列宽拖动相关
+  const [resizing, setResizing] = useState<{ column: string; startX: number; startWidth: number } | null>(null)
+
+  const handleResizeStart = useCallback((e: React.MouseEvent, column: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!activeTab) return
+    const currentWidth = activeTab.columnWidths[column] || 150
+    setResizing({ column, startX: e.clientX, startWidth: currentWidth })
+  }, [activeTab])
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!resizing || !activeTab) return
+    const diff = e.clientX - resizing.startX
+    const newWidth = Math.max(60, resizing.startWidth + diff)
+    setOpenTabs(prev => prev.map(tab => {
+      if (tab.id === activeTabId) {
+        return {
+          ...tab,
+          columnWidths: { ...tab.columnWidths, [resizing.column]: newWidth }
+        }
+      }
+      return tab
+    }))
+  }, [resizing, activeTab, activeTabId])
+
+  const handleResizeEnd = useCallback(() => {
+    setResizing(null)
+  }, [])
+
+  // 添加全局鼠标事件监听
+  useEffect(() => {
+    if (resizing) {
+      document.addEventListener('mousemove', handleResizeMove)
+      document.addEventListener('mouseup', handleResizeEnd)
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove)
+        document.removeEventListener('mouseup', handleResizeEnd)
+      }
+    }
+  }, [resizing, handleResizeMove, handleResizeEnd])
+
+  // 获取列宽
+  const getColumnWidth = (column: string) => activeTab?.columnWidths[column] || 150
 
   if (!activeConnection) {
     return (
@@ -547,12 +673,15 @@ export default function DatabasePage() {
               <div key={`${db.connectionId}:${db.path}`} className="mb-2">
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => {
+                    onDoubleClick={() => {
                       setCurrentDatabase(db)
                       // 自动展开数据库节点
                       if (!expandedNodes.has(`${db.connectionId}:${db.path}`)) {
                         toggleNode(`${db.connectionId}:${db.path}`)
                       }
+                    }}
+                    onClick={() => {
+                      setCurrentDatabase(db)
                     }}
                     className={`flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-xs ${
                       currentDatabase?.path === db.path && currentDatabase?.connectionId === db.connectionId
@@ -601,9 +730,10 @@ export default function DatabasePage() {
                             db.tables.map((table) => (
                               <button
                                 key={table.name}
-                                onClick={() => handleTableClick(table.name)}
+                                onDoubleClick={() => handleTableDoubleClick(table.name)}
+                                onClick={() => setSelectedTable(table.name)}
                                 className={`flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs ${
-                                  selectedTable === table.name
+                                  openTabs.some(tab => tab.tableName === table.name)
                                     ? 'bg-selected text-accent'
                                     : 'hover:bg-hover text-text-dim'
                                 }`}
@@ -636,12 +766,41 @@ export default function DatabasePage() {
           </div>
         </aside>
       <main className="flex-1 flex flex-col min-w-0 h-full">
+        {/* Tab 标签栏 */}
+        {openTabs.length > 0 && (
+          <div className="h-10 bg-toolbar-bg border-b border-border flex items-center overflow-x-auto">
+            {openTabs.map((tab) => (
+              <div
+                key={tab.id}
+                onClick={() => {
+                  setActiveTabId(tab.id)
+                  setSelectedTable(tab.tableName)
+                }}
+                className={`flex items-center gap-2 px-4 h-full cursor-pointer border-r border-border text-xs whitespace-nowrap ${
+                  activeTabId === tab.id
+                    ? 'bg-panel text-accent border-b-2 border-b-accent'
+                    : 'text-text-muted hover:bg-hover hover:text-text'
+                }`}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>{tab.tableName}</span>
+                <button
+                  onClick={(e) => handleCloseTab(tab.id, e)}
+                  className="p-0.5 hover:bg-hover rounded"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Toolbar */}
         <div className="h-10 bg-toolbar-bg border-b border-border flex items-center justify-between px-3">
           <div className="flex items-center gap-2">
             <button 
               onClick={openAddModal}
-              disabled={!selectedTable}
+              disabled={!activeTab}
               className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-medium transition-all neu-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -657,12 +816,22 @@ export default function DatabasePage() {
             </button>
             <div className="w-px h-5 bg-border mx-1" />
             <button 
+              onClick={refreshCurrentTab}
+              disabled={!activeTab || loadingTables}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium round-btn text-text-muted hover:text-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="刷新当前表数据"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingTables ? 'animate-spin' : ''}`} />
+              刷新表
+            </button>
+            <button 
               onClick={refreshDatabase}
               disabled={!currentDatabase || loadingTables}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium round-btn text-text-muted hover:text-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="刷新数据库结构（重新加载表列表）"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loadingTables ? 'animate-spin' : ''}`} />
-              刷新
+              刷新库
             </button>
             <button 
               onClick={handleExport}
@@ -696,7 +865,7 @@ export default function DatabasePage() {
           {!currentDatabase ? (
             <div className="h-full flex flex-col items-center justify-center text-text-muted">
               <Database className="w-12 h-12 mb-4 opacity-30" />
-              <p className="text-sm">请先在左侧点击"打开数据库"按钮</p>
+              <p className="text-sm">请先在左侧双击数据库打开</p>
               <button
                 onClick={openDbModal}
                 className="mt-3 flex items-center gap-2 px-4 py-2 text-white text-xs font-medium transition-all neu-btn-primary"
@@ -705,12 +874,12 @@ export default function DatabasePage() {
                 打开数据库
               </button>
             </div>
-          ) : !selectedTable ? (
+          ) : openTabs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-text-muted">
               <Table className="w-12 h-12 mb-4 opacity-30" />
-              <p className="text-sm">选择一个表以查看数据</p>
+              <p className="text-sm">双击左侧表名称打开数据</p>
             </div>
-          ) : loading ? (
+          ) : activeTab?.loading ? (
             <div className="h-full flex items-center justify-center text-text-muted">
               <RefreshCw className="w-6 h-6 animate-spin" />
             </div>
@@ -718,7 +887,7 @@ export default function DatabasePage() {
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-10">
                 <tr>
-                  <th className="w-8">
+                  <th className="w-8 min-w-[32px]">
                     <input 
                       type="checkbox" 
                       className="rounded cursor-pointer accent-accent"
@@ -727,9 +896,15 @@ export default function DatabasePage() {
                     />
                   </th>
                   {tableData.columns.map((col) => (
-                    <th key={col} className="whitespace-nowrap">{col}</th>
+                    <th key={col} className="relative" style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }}>
+                      <span className="block truncate pr-4">{col}</span>
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors"
+                        onMouseDown={(e) => handleResizeStart(e, col)}
+                      />
+                    </th>
                   ))}
-                  <th className="w-20">操作</th>
+                  <th className="w-20 min-w-[80px]">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -738,7 +913,7 @@ export default function DatabasePage() {
                     key={row.id || idx} 
                     className={`group transition-all ${selectedRows.has(idx) ? 'bg-selected/50' : ''}`}
                   >
-                    <td className="text-center">
+                    <td className="text-center min-w-[32px]">
                       <input 
                         type="checkbox" 
                         className="rounded cursor-pointer accent-accent"
@@ -747,7 +922,7 @@ export default function DatabasePage() {
                       />
                     </td>
                     {tableData.columns.map((col) => (
-                      <td key={col} className="whitespace-nowrap">
+                      <td key={col} style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }} className="truncate max-w-[300px]">
                         {row[col] === null ? (
                           <span className="text-text-muted italic">NULL</span>
                         ) : (
@@ -755,7 +930,7 @@ export default function DatabasePage() {
                         )}
                       </td>
                     ))}
-                    <td>
+                    <td className="min-w-[80px]">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                           onClick={() => openEditModal(row)}
@@ -781,7 +956,7 @@ export default function DatabasePage() {
         </div>
 
         {/* Pagination */}
-        {selectedTable && (
+        {activeTab && (
           <div className="h-9 bg-toolbar-bg border-t border-border flex items-center justify-between px-3 text-xs">
             <span className="text-text-muted">
               {tableData ? `共 ${tableData.totalCount?.toLocaleString() ?? tableData.rows.length} 条` : '加载中...'}

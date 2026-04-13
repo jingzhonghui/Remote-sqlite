@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { 
   Database, Table, Search, RefreshCw, Plus, Trash2, Edit3, Copy, Check,
-  ChevronRight, ChevronDown, FileSpreadsheet, Filter, Download, Loader2, AlertCircle,
-  WifiOff, Server, X, FolderOpen
+  ChevronRight, ChevronDown, FileSpreadsheet, Download, Loader2, AlertCircle,
+  WifiOff, Server, X, FolderOpen, Filter
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
@@ -10,6 +10,13 @@ import { Tooltip } from '../components/Tooltip'
 
 // 定义排序状态
 type SortDirection = 'asc' | 'desc' | null
+
+// 定义筛选条件
+interface FilterCondition {
+  column: string
+  operator: 'contains' | 'equals' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan' | 'isNull' | 'isNotNull'
+  value: string
+}
 
 // 定义打开的表标签页类型
 interface TableTab {
@@ -25,6 +32,9 @@ interface TableTab {
   columnWidths: Record<string, number>
   sortColumn: string | null
   sortDirection: SortDirection
+  // 搜索和筛选
+  globalSearch: string
+  columnFilters: FilterCondition[]
 }
 
 export default function DatabasePage() {
@@ -152,6 +162,8 @@ export default function DatabasePage() {
         columnWidths: {},
         sortColumn: null,
         sortDirection: null,
+        globalSearch: '',
+        columnFilters: [],
       }
       setOpenTabs(prev => [...prev, newTab])
       setActiveTabId(newTab.id)
@@ -618,12 +630,129 @@ export default function DatabasePage() {
   // 复制单元格数据
   const [copiedCell, setCopiedCell] = useState<string | null>(null)
   
+  // 筛选器状态
+  // 筛选面板状态
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [filterColumn, setFilterColumn] = useState('')
+  const [filterOperator, setFilterOperator] = useState<FilterCondition['operator']>('contains')
+  const [filterValue, setFilterValue] = useState('')
+  
   const copyCell = (value: any, cellKey: string) => {
     const text = value === null ? 'NULL' : String(value)
     navigator.clipboard.writeText(text)
     setCopiedCell(cellKey)
     setTimeout(() => setCopiedCell(null), 1500)
   }
+
+  // 全局搜索处理
+  const handleGlobalSearch = (value: string) => {
+    if (!activeTabId) return
+    setSearchTerm(value)
+    setOpenTabs(prev => prev.map(tab =>
+      tab.id === activeTabId ? { ...tab, globalSearch: value } : tab
+    ))
+  }
+
+  // 清除搜索
+  const clearSearch = () => {
+    handleGlobalSearch('')
+  }
+
+  // 删除筛选
+  const removeColumnFilter = (index: number) => {
+    if (!activeTabId) return
+    setOpenTabs(prev => prev.map(tab =>
+      tab.id === activeTabId
+        ? { ...tab, columnFilters: tab.columnFilters.filter((_, i) => i !== index) }
+        : tab
+    ))
+  }
+
+  // 清除所有筛选
+  const clearAllFilters = () => {
+    if (!activeTabId) return
+    setOpenTabs(prev => prev.map(tab =>
+      tab.id === activeTabId
+        ? { ...tab, globalSearch: '', columnFilters: [] }
+        : tab
+    ))
+    setSearchTerm('')
+  }
+
+  // 筛选操作符映射
+  const operatorLabels: Record<FilterCondition['operator'], string> = {
+    contains: '包含',
+    equals: '等于',
+    startsWith: '开头是',
+    endsWith: '结尾是',
+    greaterThan: '大于',
+    lessThan: '小于',
+    isNull: '为空',
+    isNotNull: '不为空',
+  }
+
+  // 判断单行是否满足筛选条件
+  const rowMatchesFilter = (row: any, filter: FilterCondition): boolean => {
+    const cellValue = row[filter.column]
+    const filterValue = filter.value
+
+    switch (filter.operator) {
+      case 'contains':
+        return cellValue !== null && String(cellValue).toLowerCase().includes(filterValue.toLowerCase())
+      case 'equals':
+        if (cellValue === null) return filterValue === '' || filterValue.toLowerCase() === 'null'
+        return String(cellValue).toLowerCase() === filterValue.toLowerCase()
+      case 'startsWith':
+        return cellValue !== null && String(cellValue).toLowerCase().startsWith(filterValue.toLowerCase())
+      case 'endsWith':
+        return cellValue !== null && String(cellValue).toLowerCase().endsWith(filterValue.toLowerCase())
+      case 'greaterThan':
+        if (cellValue === null) return false
+        const numVal = Number(cellValue)
+        const numFilter = Number(filterValue)
+        if (!isNaN(numVal) && !isNaN(numFilter)) return numVal > numFilter
+        return String(cellValue) > filterValue
+      case 'lessThan':
+        if (cellValue === null) return false
+        const numVal2 = Number(cellValue)
+        const numFilter2 = Number(filterValue)
+        if (!isNaN(numVal2) && !isNaN(numFilter2)) return numVal2 < numFilter2
+        return String(cellValue) < filterValue
+      case 'isNull':
+        return cellValue === null
+      case 'isNotNull':
+        return cellValue !== null
+      default:
+        return true
+    }
+  }
+
+  // 获取筛选后的数据
+  const getFilteredData = () => {
+    if (!tableData || !activeTab) return tableData
+    
+    let filteredRows = [...tableData.rows]
+    
+    // 应用全局搜索
+    if (activeTab.globalSearch.trim()) {
+      const search = activeTab.globalSearch.toLowerCase()
+      filteredRows = filteredRows.filter(row =>
+        tableData.columns.some(col => {
+          const val = row[col]
+          return val !== null && String(val).toLowerCase().includes(search)
+        })
+      )
+    }
+    
+    // 应用列筛选
+    for (const filter of activeTab.columnFilters) {
+      filteredRows = filteredRows.filter(row => rowMatchesFilter(row, filter))
+    }
+    
+    return { ...tableData, rows: filteredRows }
+  }
+
+  const filteredTableData = getFilteredData()
 
   // 双击表头排序
   const handleSort = (column: string) => {
@@ -653,13 +782,13 @@ export default function DatabasePage() {
     }))
   }
 
-  // 获取排序后的数据
-  const getSortedData = () => {
-    if (!tableData || !activeTab) return tableData
-    if (!activeTab.sortColumn || !activeTab.sortDirection) return tableData
+  // 获取排序后的数据（筛选+排序）
+  const getSortedFilteredData = () => {
+    if (!filteredTableData || !activeTab) return filteredTableData
+    if (!activeTab.sortColumn || !activeTab.sortDirection) return filteredTableData
     
     const { sortColumn, sortDirection } = activeTab
-    const sortedRows = [...tableData.rows].sort((a, b) => {
+    const sortedRows = [...filteredTableData.rows].sort((a, b) => {
       const aVal = a[sortColumn]
       const bVal = b[sortColumn]
       
@@ -680,10 +809,11 @@ export default function DatabasePage() {
       return sortDirection === 'asc' ? cmp : -cmp
     })
     
-    return { ...tableData, rows: sortedRows }
+    return { ...filteredTableData, rows: sortedRows }
   }
 
-  const sortedTableData = getSortedData()
+  // 排序后的数据（基于筛选后的数据）
+  const sortedFilteredTableData = getSortedFilteredData()
 
   if (!activeConnection) {
     return (
@@ -922,19 +1052,54 @@ export default function DatabasePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* 搜索框 */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleGlobalSearch(e.target.value)}
                 placeholder="搜索数据..."
-                className="w-48 pl-8 pr-3 py-1 text-xs"
+                className="w-48 pl-8 pr-8 py-1 text-xs"
               />
+              {searchTerm && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-            <button className="p-1.5 hover:bg-hover rounded">
-              <Filter className="w-3.5 h-3.5 text-text-muted" />
-            </button>
+            {/* 筛选按钮 */}
+            <Tooltip content={showFilterPanel || activeTab?.columnFilters.length ? '收起筛选' : '添加筛选'}>
+              <button
+                onClick={() => setShowFilterPanel(!showFilterPanel)}
+                className={`relative p-1.5 rounded border transition-all ${
+                  showFilterPanel || activeTab?.columnFilters.length
+                    ? 'bg-accent/20 border-accent text-accent'
+                    : 'bg-hover border-border text-text-muted hover:text-text hover:border-text-muted'
+                }`}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                {activeTab && activeTab.columnFilters.length > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-accent text-white text-[10px] rounded-full min-w-[16px] text-center leading-none">
+                    {activeTab.columnFilters.length}
+                  </span>
+                )}
+              </button>
+            </Tooltip>
+            {/* 清除筛选按钮 */}
+            {activeTab && (activeTab.globalSearch || activeTab.columnFilters.length > 0) && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-error transition-all"
+                title="清除所有筛选"
+              >
+                <X className="w-3 h-3" />
+                <span>清除</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -961,11 +1126,11 @@ export default function DatabasePage() {
             <div className="h-full flex items-center justify-center text-text-muted">
               <RefreshCw className="w-6 h-6 animate-spin" />
             </div>
-          ) : tableData ? (
+          ) : sortedFilteredTableData ? (
             <table className="w-full text-xs table-fixed">
               <colgroup>
                 <col className="w-8 min-w-[32px]" />
-                {tableData.columns.map((col) => (
+                {sortedFilteredTableData.columns.map((col) => (
                   <col key={col} style={{ width: getColumnWidth(col), minWidth: '60px' }} />
                 ))}
                 <col className="w-20 min-w-[80px]" />
@@ -976,11 +1141,11 @@ export default function DatabasePage() {
                     <input 
                       type="checkbox" 
                       className="rounded cursor-pointer accent-accent"
-                      checked={selectedRows.size === tableData.rows.length && tableData.rows.length > 0}
+                      checked={selectedRows.size === sortedFilteredTableData.rows.length && sortedFilteredTableData.rows.length > 0}
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  {tableData.columns.map((col) => {
+                  {sortedFilteredTableData.columns.map((col) => {
                     const isSorted = activeTab?.sortColumn === col
                     const sortDir = activeTab?.sortDirection
                     return (
@@ -1010,7 +1175,7 @@ export default function DatabasePage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedTableData?.rows.map((row, idx) => (
+                {sortedFilteredTableData?.rows.map((row, idx) => (
                   <tr 
                     key={row.id || idx} 
                     className={`group transition-all ${selectedRows.has(idx) ? 'bg-selected/50' : ''}`}
@@ -1023,7 +1188,7 @@ export default function DatabasePage() {
                         onChange={() => toggleRowSelection(idx)}
                       />
                     </td>
-                    {sortedTableData?.columns.map((col) => {
+                    {sortedFilteredTableData?.columns.map((col) => {
                       const cellValue = row[col]
                       const displayValue = cellValue === null ? (
                         <span className="text-text-muted italic">NULL</span>
@@ -1082,11 +1247,136 @@ export default function DatabasePage() {
           ) : null}
         </div>
 
+        {/* 筛选工具栏 - 仅在有筛选条件或点击筛选按钮后显示 */}
+        {activeTab && sortedFilteredTableData && (showFilterPanel || activeTab.columnFilters.length > 0) && (
+          <div className="bg-toolbar-bg border-t border-border px-3 py-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* 筛选条件标签 */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {activeTab.columnFilters.map((filter, idx) => (
+                  <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-info/20 rounded text-xs">
+                    <span className="text-accent font-medium">{filter.column}</span>
+                    <span className="text-text-muted">{operatorLabels[filter.operator]}</span>
+                    {filter.operator !== 'isNull' && filter.operator !== 'isNotNull' && (
+                      <span className="text-info">"{filter.value}"</span>
+                    )}
+                    <button
+                      onClick={() => removeColumnFilter(idx)}
+                      className="ml-1 hover:text-error"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* 快速添加筛选 - 仅在点击筛选按钮后显示 */}
+              {showFilterPanel && activeTab.columnFilters.length < 5 && (
+                <div className="flex items-center gap-1">
+                  <select
+                    value={filterColumn}
+                    onChange={(e) => setFilterColumn(e.target.value)}
+                    className="px-2 py-1 text-xs bg-hover rounded border border-border"
+                    disabled={!activeTab}
+                  >
+                    {tableData?.columns.map((col) => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterOperator}
+                    onChange={(e) => setFilterOperator(e.target.value as FilterCondition['operator'])}
+                    className="px-2 py-1 text-xs bg-hover rounded border border-border"
+                  >
+                    <option value="contains">包含</option>
+                    <option value="equals">等于</option>
+                    <option value="startsWith">开头是</option>
+                    <option value="endsWith">结尾是</option>
+                    <option value="greaterThan">大于</option>
+                    <option value="lessThan">小于</option>
+                    <option value="isNull">为空</option>
+                    <option value="isNotNull">不为空</option>
+                  </select>
+                  {!['isNull', 'isNotNull'].includes(filterOperator) && (
+                    <input
+                      type="text"
+                      value={filterValue}
+                      onChange={(e) => setFilterValue(e.target.value)}
+                      placeholder="值"
+                      className="w-24 px-2 py-1 text-xs bg-hover rounded border border-border"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && filterValue.trim()) {
+                          // 直接添加筛选
+                          const newFilter: FilterCondition = {
+                            column: filterColumn,
+                            operator: filterOperator,
+                            value: filterValue.trim(),
+                          }
+                          setOpenTabs(prev => prev.map(tab =>
+                            tab.id === activeTabId
+                              ? { ...tab, columnFilters: [...tab.columnFilters, newFilter] }
+                              : tab
+                          ))
+                          setFilterValue('')
+                        }
+                      }}
+                    />
+                  )}
+                  <button
+                    onClick={() => {
+                      if (!['isNull', 'isNotNull'].includes(filterOperator) && !filterValue.trim()) return
+                      const newFilter: FilterCondition = {
+                        column: filterColumn,
+                        operator: filterOperator,
+                        value: filterOperator === 'isNull' || filterOperator === 'isNotNull' ? '' : filterValue.trim(),
+                      }
+                      setOpenTabs(prev => prev.map(tab =>
+                        tab.id === activeTabId
+                          ? { ...tab, columnFilters: [...tab.columnFilters, newFilter] }
+                          : tab
+                      ))
+                      if (!['isNull', 'isNotNull'].includes(filterOperator)) {
+                        setFilterValue('')
+                      }
+                    }}
+                    disabled={!activeTab || (!['isNull', 'isNotNull'].includes(filterOperator) && !filterValue.trim())}
+                    className="px-2 py-1 text-xs bg-accent text-white rounded hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    + 添加
+                  </button>
+                </div>
+              )}
+
+              {/* 清除所有按钮 */}
+              {activeTab.columnFilters.length > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="px-2 py-1 text-xs text-error hover:text-error/80"
+                >
+                  清除全部
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Pagination */}
         {activeTab && (
           <div className="h-9 bg-toolbar-bg border-t border-border flex items-center justify-between px-3 text-xs">
             <span className="text-text-muted">
-              {tableData ? `共 ${tableData.totalCount?.toLocaleString() ?? tableData.rows.length} 条` : '加载中...'}
+              {filteredTableData ? (
+                <>
+                  {filteredTableData.rows.length !== tableData?.rows.length ? (
+                    <>
+                      <span className="text-info">{filteredTableData.rows.length.toLocaleString()}</span>
+                      <span className="mx-1">/</span>
+                      <span>{tableData?.totalCount?.toLocaleString() ?? tableData?.rows.length} 条</span>
+                    </>
+                  ) : (
+                    <>共 {tableData?.totalCount?.toLocaleString() ?? tableData?.rows.length} 条</>
+                  )}
+                </>
+              ) : '加载中...'}
             </span>
             <div className="flex items-center gap-2">
               <button className="px-2 py-1 bg-hover rounded hover:bg-hover/80 disabled:opacity-50" disabled>
@@ -1269,6 +1559,7 @@ export default function DatabasePage() {
         </div>
       </div>
     )}
+
     </>
   )
 }

@@ -63,6 +63,7 @@
   "build": {
     "appId": "com.example.remote-sqlite",
     "productName": "RemoteSQLite",
+    "publish": null,
     "directories": {
       "output": "release",
       "buildResources": "build"

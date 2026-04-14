@@ -87,7 +87,7 @@ pnpm install
 # 启动 Vite 开发服务器
 npm run dev
 
-# 在新终端启动 Electron 开发模式
+# 启动 Electron 开发模式
 npm run electron:dev
 ```
 

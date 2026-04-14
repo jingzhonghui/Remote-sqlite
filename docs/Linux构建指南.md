@@ -25,10 +25,10 @@ uname -a
 
 ```bash
 # 进入项目目录
-cd /mnt/c/Users/jzh/Desktop/data/aicode/remote-sqlite/src
+cd ./src
 
-# 安装 Node 依赖
-pnpm install
+# 安装 Node 依赖 (使用 npm)
+npm install
 
 # 安装 Linux 打包所需的系统依赖 (Ubuntu/Debian)
 sudo apt-get update
@@ -49,12 +49,12 @@ sudo apt-get install -y rpm
 
 ```bash
 # 打包所有 Linux 格式
-pnpm run electron:build:linux
+npm run electron:build:linux
 
 # 或只打包特定格式
-pnpm run electron:build:linux:appimage   # 仅 AppImage
-pnpm run electron:build:linux:deb        # 仅 deb
-pnpm run electron:build:linux:rpm        # 仅 rpm
+npm run electron:build:linux:appimage   # 仅 AppImage
+npm run electron:build:linux:deb        # 仅 deb
+npm run electron:build:linux:rpm        # 仅 rpm
 ```
 
 ### 4. 输出位置
@@ -63,69 +63,6 @@ pnpm run electron:build:linux:rpm        # 仅 rpm
 
 ```
 src/release/
-├── RemoteSQLite-1.0.0.AppImage      # AppImage 格式
-├── RemoteSQLite_1.0.0_amd64.deb     # Debian 安装包
-├── RemoteSQLite-1.0.0.x86_64.rpm    # RPM 安装包
-└── RemoteSQLite-1.0.0.tar.gz        # 压缩包
-```
-
-## 安装和使用
-
-### AppImage（推荐）
-
-```bash
-# 赋予执行权限
-chmod +x RemoteSQLite-1.0.0.AppImage
-
-# 直接运行
-./RemoteSQLite-1.0.0.AppImage
-
-# 可选：添加到系统菜单
-./RemoteSQLite-1.0.0.AppImage --appimage-extract
-sudo cp squashfs-root/RemoteSQLite.desktop /usr/share/applications/
-sudo cp squashfs-root/RemoteSQLite.png /usr/share/pixmaps/
-```
-
-### deb 包（Ubuntu/Debian）
-
-```bash
-# 安装
-sudo dpkg -i RemoteSQLite_1.0.0_amd64.deb
-
-# 如果依赖有问题，修复
-sudo apt-get install -f
-
-# 启动
-remotesqlite
-# 或在应用菜单中搜索 "RemoteSQLite"
-
-# 卸载
-sudo dpkg -r RemoteSQLite
-```
-
-### rpm 包（Fedora/CentOS/RHEL）
-
-```bash
-# 安装
-sudo rpm -i RemoteSQLite-1.0.0.x86_64.rpm
-
-# 启动
-remotesqlite
-
-# 卸载
-sudo rpm -e RemoteSQLite
-```
-
-### tar.gz
-
-```bash
-# 解压
-tar -xzf RemoteSQLite-1.0.0.tar.gz
-
-# 运行
-cd RemoteSQLite-1.0.0
-./RemoteSQLite
-```
 
 ## 常见问题
 
@@ -146,7 +83,7 @@ sudo apt-get install -y libssh2-1-dev openssl libssl-dev
 sudo apt-get install -y libfuse2
 
 # 或使用 --no-sandbox 参数运行（不推荐长期使用）
-./RemoteSQLite-1.0.0.AppImage --no-sandbox
+./RemoteSQLite-x.x.x.AppImage --no-sandbox
 ```
 
 ### 3. WSL 中打包后无法在纯 Linux 运行
@@ -158,7 +95,7 @@ sudo apt-get install -y libfuse2
 ls -la node_modules/cpu-features/build/Release/
 
 # 重新编译（如果需要）
-pnpm rebuild
+npm rebuild
 ```
 
 ### 4. 图标不显示

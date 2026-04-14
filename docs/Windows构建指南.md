@@ -1,6 +1,6 @@
 # RemoteSQLite Windows 打包说明
 
-> **适用版本**: v1.0.0  
+> **适用版本**: vx.x.x  
 > **更新日期**: 2026-04-11  
 > **适用平台**: Windows 10/11 (x64)
 
@@ -50,7 +50,7 @@ winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passi
 
 ```powershell
 git clone <repository-url>
-cd remote-sqlite/src
+cd Remote-sqlite/src
 ```
 
 ### 2.2 安装依赖
@@ -58,12 +58,6 @@ cd remote-sqlite/src
 ```powershell
 # 使用 npm 安装依赖
 npm install
-
-# 或者使用 yarn
-yarn install
-
-# 或者使用 pnpm
-pnpm install
 ```
 
 ### 2.3 配置环境变量（如需要）

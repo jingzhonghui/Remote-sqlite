@@ -43,10 +43,10 @@ npm install
 
 ```bash
 # 只启动 Vite 开发服务器（浏览器预览）
-pnpm run dev
+npm run dev
 
 # 启动 Electron（需要 X Server，如 VcXsrv）
-pnpm run electron:dev
+npm run electron:dev
 ```
 
 ## WSL 中显示 Electron 窗口

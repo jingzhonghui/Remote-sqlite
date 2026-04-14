@@ -88,7 +88,7 @@ export default function TableDesignerPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <header className="h-12 bg-toolbar-bg border-b border-border flex items-center justify-between px-4">
+      <header className="h-12 bg-toolbar-bg border-b border-border rounded-t-xl flex items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <h1 className="text-sm font-medium">可视化建表</h1>
           <input

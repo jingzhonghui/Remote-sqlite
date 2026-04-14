@@ -203,9 +203,9 @@ export default function SqlEditorPage() {
       {/* Main Content with vertical splitter for editor/result */}
       <Splitter direction="vertical" defaultSize={300} minSize={100}>
         {/* Editor Panel */}
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full rounded-xl overflow-hidden">
           {/* Toolbar */}
-          <div className="h-10 bg-toolbar-bg border-b border-border flex items-center justify-between px-3 flex-shrink-0">
+          <div className="h-10 bg-toolbar-bg border-b border-border flex items-center justify-between px-3 flex-shrink-0 rounded-t-xl">
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExecute}

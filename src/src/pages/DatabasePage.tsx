@@ -846,9 +846,9 @@ export default function DatabasePage() {
   return (
     <>
     <Splitter direction="horizontal" defaultSize={224} minSize={150}>
-      <aside className="h-full bg-sidebar border-r border-border flex flex-col">
+      <aside className="h-full bg-sidebar border-r border-border rounded-xl flex flex-col overflow-hidden">
           {/* 连接状态栏 */}
-          <div className="h-10 flex items-center px-3 border-b border-border justify-between">
+          <div className="h-10 flex items-center px-3 border-b border-border rounded-t-xl justify-between">
             <span className="text-xs font-medium text-text-muted">对象浏览器</span>
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
@@ -976,7 +976,7 @@ export default function DatabasePage() {
       <main className="flex-1 flex flex-col min-w-0 h-full">
         {/* Tab 标签栏 */}
         {openTabs.length > 0 && (
-          <div className="h-10 bg-toolbar-bg border-b border-border flex items-center overflow-x-auto">
+          <div className="h-10 bg-toolbar-bg border-b border-border rounded-t-xl flex items-center overflow-x-auto">
             {openTabs.map((tab) => (
               <div
                 key={tab.id}
@@ -1004,7 +1004,7 @@ export default function DatabasePage() {
         )}
 
         {/* Toolbar */}
-        <div className="h-10 bg-toolbar-bg border-b border-border flex items-center justify-between px-3">
+        <div className="h-10 bg-toolbar-bg border-b border-border rounded-xl flex items-center justify-between px-3 mx-1">
           <div className="flex items-center gap-2">
             <button 
               onClick={openAddModal}
@@ -1060,7 +1060,7 @@ export default function DatabasePage() {
                 value={searchTerm}
                 onChange={(e) => handleGlobalSearch(e.target.value)}
                 placeholder="搜索数据..."
-                className="w-48 pl-8 pr-8 py-1 text-xs"
+                className="w-48 pl-8 pr-8 py-1 text-xs rounded-xl"
               />
               {searchTerm && (
                 <button
@@ -1104,7 +1104,7 @@ export default function DatabasePage() {
         </div>
 
         {/* Data Table */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto mx-1 my-1 rounded-xl">
           {!currentDatabase ? (
             <div className="h-full flex flex-col items-center justify-center text-text-muted">
               <Database className="w-12 h-12 mb-4 opacity-30" />
@@ -1249,7 +1249,7 @@ export default function DatabasePage() {
 
         {/* 筛选工具栏 - 仅在有筛选条件或点击筛选按钮后显示 */}
         {activeTab && sortedFilteredTableData && (showFilterPanel || activeTab.columnFilters.length > 0) && (
-          <div className="bg-toolbar-bg border-t border-border px-3 py-2">
+          <div className="bg-toolbar-bg border-t border-border rounded-b-xl px-3 py-2 mx-1">
             <div className="flex items-center gap-3 flex-wrap">
               {/* 筛选条件标签 */}
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -1362,7 +1362,7 @@ export default function DatabasePage() {
 
         {/* Pagination */}
         {activeTab && (
-          <div className="h-9 bg-toolbar-bg border-t border-border flex items-center justify-between px-3 text-xs">
+          <div className="h-9 bg-toolbar-bg border-t border-border rounded-b-xl flex items-center justify-between px-3 mx-1 mb-1 text-xs">
             <span className="text-text-muted">
               {filteredTableData ? (
                 <>

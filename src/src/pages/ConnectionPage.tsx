@@ -255,7 +255,7 @@ export default function ConnectionPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <header className="h-12 bg-toolbar-bg border-b border-border flex items-center justify-between px-4">
+      <header className="h-12 bg-toolbar-bg border-b border-border rounded-t-xl flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
           <h1 className="text-sm font-medium">连接管理</h1>
           {connectionPool.connections.length > 0 && (
@@ -278,7 +278,7 @@ export default function ConnectionPage() {
       <div className="flex-1 p-4 overflow-auto">
         {/* 已打开的数据库快捷栏 */}
         {databases.length > 0 && (
-          <div className="mb-4 p-3 bg-panel rounded-lg border border-border">
+          <div className="mb-4 p-3 bg-panel rounded-xl border border-border">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-medium text-text-muted flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5" />
@@ -320,7 +320,7 @@ export default function ConnectionPage() {
               <Wifi className="w-3.5 h-3.5" />
               活跃连接池
             </h3>
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-3 flex-wrap p-2 bg-panel rounded-xl">
               {connectionPool.connections.map((conn) => {
                 return (
                   <div
@@ -357,6 +357,7 @@ export default function ConnectionPage() {
             <p className="text-xs mt-1">点击右上角按钮添加新连接</p>
           </div>
         ) : (
+          <div className="p-2 bg-panel rounded-xl">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {savedConnections.map((conn) => {
               const status = getConnectionStatus(conn.id!)
@@ -516,6 +517,7 @@ export default function ConnectionPage() {
                 </div>
               )
             })}
+          </div>
           </div>
         )}
       </div>

@@ -63,8 +63,8 @@ export default function Layout({ children, currentTab, onTabChange }: LayoutProp
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden p-4">
-          <div className="h-full neu-card p-4">
+        <main className="flex-1 overflow-hidden p-1.5">
+          <div className="h-full neu-card p-1">
             {children}
           </div>
         </main>

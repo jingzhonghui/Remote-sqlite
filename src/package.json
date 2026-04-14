@@ -23,8 +23,8 @@
     "electron:build:linux:appimage": "bash scripts/build-linux.sh",
     "electron:build:linux:deb": "npm run build && electron-builder --linux deb",
     "electron:build:linux:rpm": "npm run build && electron-builder --linux rpm",
-    "electron:build:win": "npm run build && electron-builder --win",
-    "electron:build:win:all": "npm run build && electron-builder --win nsis portable zip",
+    "electron:build:win": "npm run build && electron-builder --win zip",
+    "electron:build:win:all": "npm run build && electron-builder --win nsis zip",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "postinstall": "electron-builder install-app-deps"
   },

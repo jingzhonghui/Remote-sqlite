@@ -654,6 +654,7 @@ export default function DatabasePage() {
     ))
   }
 
+
   // 清除搜索
   const clearSearch = () => {
     handleGlobalSearch('')
@@ -1090,17 +1091,6 @@ export default function DatabasePage() {
                 )}
               </button>
             </Tooltip>
-            {/* 清除筛选按钮 */}
-            {activeTab && (activeTab.globalSearch || activeTab.columnFilters.length > 0) && (
-              <button
-                onClick={clearAllFilters}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-error transition-all"
-                title="清除所有筛选"
-              >
-                <X className="w-3 h-3" />
-                <span>清除</span>
-              </button>
-            )}
           </div>
         </div>
 

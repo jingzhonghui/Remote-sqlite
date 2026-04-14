@@ -1,6 +1,6 @@
 {
   "name": "remote-sqlite",
-  "version": "1.0.0",
+  "version": "0.6.0",
   "description": "跨平台远程 SQLite 数据库管理桌面应用",
   "homepage": ".",
   "repository": {

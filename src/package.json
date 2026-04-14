@@ -93,8 +93,17 @@
       "target": "dmg"
     },
     "win": {
-      "target": "nsis",
-      "artifactName": "${productName}-${version}-Setup.${ext}"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "linux": {
       "target": [
@@ -125,7 +134,7 @@
       ],
       "category": "Development",
       "maintainer": "jzh879869954@163.com",
-      "vendor": "Your Name",
+      "vendor": "jzh",
       "synopsis": "Remote SQLite Database Manager",
       "description": "A cross-platform desktop application for managing remote SQLite databases via SSH",
       "desktop": {

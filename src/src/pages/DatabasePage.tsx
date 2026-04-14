@@ -562,14 +562,15 @@ export default function DatabasePage() {
   
   // 打开编辑模态框
   const openEditModal = (row: any) => {
-    setEditingRow(row)
-    setEditFormData(row ? { ...row } : {})
-    // 初始化空值
+    const initialData: Record<string, any> = row ? { ...row } : {}
+    // 初始化空值（确保所有列都有对应的键）
     tableData?.columns.forEach(col => {
-      if (editFormData[col] === undefined) {
-        setEditFormData(prev => ({ ...prev, [col]: '' }))
+      if (initialData[col] === undefined) {
+        initialData[col] = ''
       }
     })
+    setEditingRow(row)
+    setEditFormData(initialData)
   }
   
   // 打开新增模态框

@@ -68,7 +68,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: |
             src/release/win-unpacked/*.exe
-            src/release/RemoteSQLite-*-win*.zip
+            src/release/RemoteSQLite-*-Setup*.zip
             src/release/RemoteSQLite-*-Setup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

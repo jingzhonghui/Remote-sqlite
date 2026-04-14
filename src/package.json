@@ -88,12 +88,13 @@
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
     "nodeGypRebuild": false,
-    "includePdb": true,
+    "includePdb": false,
     "mac": {
       "target": "dmg"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
     },
     "linux": {
       "target": [

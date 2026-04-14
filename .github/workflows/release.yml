@@ -20,12 +20,12 @@ jobs:
           - os: windows-latest
             name: Windows
             artifact_name: RemoteSQLite-win64
-            build_cmd: pnpm run electron:build:win:all
+            build_cmd: npm run electron:build:win:all
             artifact_pattern: '*.exe'
           - os: ubuntu-latest
             name: Linux
             artifact_name: RemoteSQLite-linux-x64
-            build_cmd: pnpm run electron:build:linux
+            build_cmd: npm run electron:build:linux
             artifact_pattern: '*.AppImage,*.deb,*.rpm,*.tar.gz'
           # - os: macos-latest
           #   name: macOS
@@ -42,25 +42,7 @@ jobs:
         with:
           node-version: '24.14.1'
           cache: 'npm'
-          cache-dependency-path: src/pnpm-lock.yaml
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 10
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('src/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          cache-dependency-path: src/package-lock.json
 
       - name: Set version from tag
         run: node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));pkg.version=process.env.TAG_VERSION.replace(/^v/,'');fs.writeFileSync('package.json',JSON.stringify(pkg,null,2));console.log('Version:',pkg.version);"
@@ -70,7 +52,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./src
-        run: pnpm install --no-frozen-lockfile
+        run: npm ci
 
       - name: Build application
         working-directory: ./src

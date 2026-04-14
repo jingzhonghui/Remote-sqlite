@@ -20,7 +20,7 @@ jobs:
           - os: windows-latest
             name: Windows
             artifact_name: RemoteSQLite-win64
-            build_cmd: pnpm run electron:build:win
+            build_cmd: pnpm run electron:build:win:all
             artifact_pattern: '*.exe'
           - os: ubuntu-latest
             name: Linux

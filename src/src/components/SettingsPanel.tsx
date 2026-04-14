@@ -1,4 +1,4 @@
-import { X, Sun, Moon } from 'lucide-react'
+import { X, Sun, Moon, Minus, Plus } from 'lucide-react'
 import { useAppStore, type Theme } from '../stores/useAppStore'
 
 interface SettingsPanelProps {
@@ -7,11 +7,18 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
-  const { theme, setTheme } = useAppStore()
+  const { theme, setTheme, fontSize, setFontSize } = useAppStore()
 
   const themeOptions: { value: Theme; label: string; icon: React.ReactNode; desc: string }[] = [
     { value: 'dark', label: '深色模式', icon: <Moon className="w-6 h-6" />, desc: '经典暗色，护眼舒适' },
     { value: 'light', label: '浅色模式', icon: <Sun className="w-6 h-6" />, desc: '明亮清新，简约现代' },
+  ]
+
+  const fontSizeOptions = [
+    { value: 12, label: '小' },
+    { value: 14, label: '默认' },
+    { value: 16, label: '中' },
+    { value: 18, label: '大' },
   ]
 
   if (!isOpen) return null
@@ -84,6 +91,51 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   )}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* 字体大小设置 */}
+          <div>
+            <h3 className="text-sm font-medium text-text-dim mb-4 uppercase tracking-wider">字体大小</h3>
+            <div className="neu-inset p-4 rounded-xl">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                  disabled={fontSize <= 10}
+                  className="round-btn p-2 text-text-muted hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                
+                <div className="flex-1 flex items-center justify-center gap-4">
+                  {fontSizeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setFontSize(option.value)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        fontSize === option.value
+                          ? 'bg-accent text-white'
+                          : 'text-text-muted hover:bg-hover'
+                      }`}
+                    >
+                      {option.label}
+                      <span className="ml-1 text-[10px] opacity-70">({option.value}px)</span>
+                    </button>
+                  ))}
+                </div>
+                
+                <button
+                  onClick={() => setFontSize(Math.min(24, fontSize + 1))}
+                  disabled={fontSize >= 24}
+                  className="round-btn p-2 text-text-muted hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="text-center mt-3">
+                <span className="text-text-muted text-xs">当前字体大小: </span>
+                <span className="text-accent font-medium">{fontSize}px</span>
+              </div>
             </div>
           </div>
 

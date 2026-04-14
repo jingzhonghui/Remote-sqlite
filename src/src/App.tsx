@@ -11,6 +11,7 @@ type Tab = 'connection' | 'database' | 'sql' | 'designer'
 function App() {
   const [currentTab, setCurrentTab] = useState<Tab>('connection')
   const theme = useAppStore((state) => state.theme)
+  const fontSize = useAppStore((state) => state.fontSize)
 
   // 应用主题到 HTML 元素
   useEffect(() => {
@@ -18,6 +19,11 @@ function App() {
     root.classList.remove('dark', 'light')
     root.classList.add(theme)
   }, [theme])
+
+  // 应用字体大小
+  useEffect(() => {
+    document.body.style.fontSize = `${fontSize}px`
+  }, [fontSize])
 
   return (
     <Layout currentTab={currentTab} onTabChange={setCurrentTab}>

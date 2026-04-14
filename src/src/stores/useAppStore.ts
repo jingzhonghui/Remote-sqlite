@@ -8,6 +8,9 @@ interface AppState {
   // 主题
   theme: Theme
   
+  // 字体大小
+  fontSize: number
+  
   // SSH 连接
   savedConnections: SSHConfig[]
   connectionPool: ConnectionPool  // 连接池管理多个活跃连接
@@ -52,6 +55,9 @@ interface AppState {
   // Actions - 主题
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
+  
+  // Actions - 字体大小
+  setFontSize: (size: number) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -59,6 +65,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       // Initial state
       theme: 'dark',
+      fontSize: 14,
       savedConnections: [],
       connectionPool: { connections: [], activeConnectionId: null },
       activeConnectionId: null,
@@ -253,11 +260,18 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           theme: state.theme === 'dark' ? 'light' : 'dark',
         })),
+
+      // Actions - 字体大小
+      setFontSize: (size) =>
+        set(() => ({
+          fontSize: size,
+        })),
     }),
     {
       name: 'remote-sqlite-storage',
       partialize: (state) => ({
         theme: state.theme,
+        fontSize: state.fontSize,
         savedConnections: state.savedConnections,
         savedQueries: state.savedQueries,
         databases: state.databases,

@@ -8,8 +8,8 @@
     "url": "."
   },
   "author": {
-    "name": "Your Name",
-    "email": "your-email@example.com"
+    "name": "jzh",
+    "email": "jzh879869954@163.com"
   },
   "type": "module",
   "main": "dist-electron/main.js",
@@ -124,7 +124,7 @@
         }
       ],
       "category": "Development",
-      "maintainer": "your-email@example.com",
+      "maintainer": "jzh879869954@163.com",
       "vendor": "Your Name",
       "synopsis": "Remote SQLite Database Manager",
       "description": "A cross-platform desktop application for managing remote SQLite databases via SSH",

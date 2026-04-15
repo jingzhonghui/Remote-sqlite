@@ -28,13 +28,21 @@ interface TableTab {
     totalCount?: number
   } | null
   loading: boolean
-  selectedRows: Set<number>
+  selectedRows: Set<string>
   columnWidths: Record<string, number>
   sortColumn: string | null
   sortDirection: SortDirection
   // 搜索和筛选
   globalSearch: string
   columnFilters: FilterCondition[]
+}
+
+function getRowKey(row: any, columns: string[]): string {
+  const pkCol = columns.find(col =>
+    col === 'id' || col === '_id' || col.endsWith('_id')
+  ) || columns[0]
+  const val = row[pkCol]
+  return val !== undefined && val !== null ? String(val) : JSON.stringify(row)
 }
 
 export default function DatabasePage() {
@@ -57,6 +65,7 @@ export default function DatabasePage() {
   const [exporting, setExporting] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv')
+  const [saving, setSaving] = useState(false)
   
   // 打开数据库弹窗状态
   const [showOpenDbModal, setShowOpenDbModal] = useState(false)
@@ -342,7 +351,14 @@ export default function DatabasePage() {
       const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
       
       if (result.success) {
-        // 刷新数据并清空勾选
+        // 从选中状态中移除被删除的行
+        const deletedRowKey = getRowKey(row, tableData?.columns || [])
+        setOpenTabs(prev => prev.map(tab =>
+          tab.id === activeTabId
+            ? { ...tab, selectedRows: new Set([...tab.selectedRows].filter(k => k !== deletedRowKey)) }
+            : tab
+        ))
+        // 刷新数据
         await loadTableData(activeTab.tableName, activeTab.id)
       } else {
         alert(`删除失败: ${result.message}`)
@@ -353,15 +369,15 @@ export default function DatabasePage() {
   }
 
   // 切换行选中状态
-  const toggleRowSelection = (index: number) => {
+  const toggleRowSelection = (rowKey: string) => {
     if (!activeTab) return
     setOpenTabs(prev => prev.map(tab => {
       if (tab.id === activeTabId) {
         const newSelected = new Set(tab.selectedRows)
-        if (newSelected.has(index)) {
-          newSelected.delete(index)
+        if (newSelected.has(rowKey)) {
+          newSelected.delete(rowKey)
         } else {
-          newSelected.add(index)
+          newSelected.add(rowKey)
         }
         return { ...tab, selectedRows: newSelected }
       }
@@ -371,13 +387,21 @@ export default function DatabasePage() {
 
   // 切换全选状态
   const toggleSelectAll = () => {
-    if (!tableData || !activeTab) return
+    if (!sortedFilteredTableData || !activeTab) return
     setOpenTabs(prev => prev.map(tab => {
       if (tab.id === activeTabId) {
-        if (tab.selectedRows.size === tableData.rows.length) {
-          return { ...tab, selectedRows: new Set() }
+        const filteredKeys = new Set(
+          sortedFilteredTableData.rows.map(row => getRowKey(row, sortedFilteredTableData.columns))
+        )
+        const allFilteredSelected = filteredKeys.size > 0 && [...filteredKeys].every(k => tab.selectedRows.has(k))
+        if (allFilteredSelected) {
+          const newSelected = new Set(tab.selectedRows)
+          filteredKeys.forEach(k => newSelected.delete(k))
+          return { ...tab, selectedRows: newSelected }
         } else {
-          return { ...tab, selectedRows: new Set(tableData.rows.map((_, i) => i)) }
+          const newSelected = new Set(tab.selectedRows)
+          filteredKeys.forEach(k => newSelected.add(k))
+          return { ...tab, selectedRows: newSelected }
         }
       }
       return tab
@@ -403,7 +427,7 @@ export default function DatabasePage() {
       }
       
       // 获取要删除的行数据
-      const rowsToDelete = tableData?.rows.filter((_, i) => selectedRows.has(i)) || []
+      const rowsToDelete = tableData?.rows.filter(row => selectedRows.has(getRowKey(row, tableData.columns))) || []
       let failedMessages: string[] = []
       
       for (const row of rowsToDelete) {
@@ -414,9 +438,13 @@ export default function DatabasePage() {
         }
       }
       
-      // 刷新数据并清空勾选
+      // 清空所有选中
+      setOpenTabs(prev => prev.map(tab =>
+        tab.id === activeTabId ? { ...tab, selectedRows: new Set() } : tab
+      ))
+      // 刷新数据
       await loadTableData(activeTab.tableName, activeTab.id)
-      
+
       // 只有失败时才弹出错误提示
       if (failedMessages.length > 0) {
         alert(`部分删除失败：\n${failedMessages.slice(0, 3).join('\n')}${failedMessages.length > 3 ? `\n...还有 ${failedMessages.length - 3} 个错误` : ''}`)
@@ -443,7 +471,7 @@ export default function DatabasePage() {
     
     try {
       const rows = selectedRows.size > 0 
-        ? tableData.rows.filter((_, i) => selectedRows.has(i))
+        ? tableData.rows.filter(row => selectedRows.has(getRowKey(row, tableData.columns)))
         : tableData.rows
       
       let content: string
@@ -504,29 +532,31 @@ export default function DatabasePage() {
   
   // 保存记录（新增或编辑）
   const handleSaveRow = async () => {
-    if (!activeConnection || !currentDatabase || !activeTab) return
-    
+    if (!activeConnection || !currentDatabase || !activeTab || saving) return
+
+    setSaving(true)
     try {
       if (editingRow) {
         // 编辑模式：执行 UPDATE
-        const primaryKeyCol = tableData?.columns.find(col => 
+        const primaryKeyCol = tableData?.columns.find(col =>
           col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
         ) || tableData?.columns[0]
-        
+
         if (!primaryKeyCol) {
           alert('无法确定主键列')
+          setSaving(false)
           return
         }
-        
+
         const setClauses = Object.keys(editFormData)
           .filter(col => col !== primaryKeyCol)
           .map(col => `"${col}" = ${formatValueForSQL(editFormData[col])}`)
           .join(', ')
-        
+
         const sql = `UPDATE "${activeTab.tableName}" SET ${setClauses} WHERE "${primaryKeyCol}" = ${formatValueForSQL(editingRow[primaryKeyCol])}`
-        
+
         const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
-        
+
         if (result.success) {
           // 刷新表数据
           await loadTableData(activeTab.tableName, activeTab.id)
@@ -538,13 +568,27 @@ export default function DatabasePage() {
         }
       } else {
         // 新增模式：执行 INSERT
-        const columns = Object.keys(editFormData)
-        const values = columns.map(col => formatValueForSQL(editFormData[col])).join(', ')
-        
+        // 过滤掉主键列（id）和空值字段
+        const primaryKeyCol = tableData?.columns.find(col =>
+          col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
+        )
+
+        const entries = Object.entries(editFormData)
+          .filter(([col, val]) => col !== primaryKeyCol && val !== '' && val !== undefined && val !== null)
+
+        const columns = entries.map(([col]) => col)
+        const values = entries.map(([, val]) => formatValueForSQL(val)).join(', ')
+
+        if (columns.length === 0) {
+          alert('请至少填写一个字段')
+          setSaving(false)
+          return
+        }
+
         const sql = `INSERT INTO "${activeTab.tableName}" ("${columns.join('", "')}") VALUES (${values})`
-        
+
         const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
-        
+
         if (result.success) {
           // 刷新表数据
           await loadTableData(activeTab.tableName, activeTab.id)
@@ -557,6 +601,8 @@ export default function DatabasePage() {
       }
     } catch (error) {
       alert(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    } finally {
+      setSaving(false)
     }
   }
   
@@ -581,6 +627,7 @@ export default function DatabasePage() {
       initialData[col] = ''
     })
     setEditFormData(initialData)
+    setShowAddModal(true)
   }
 
   // 列宽拖动相关
@@ -1132,7 +1179,7 @@ export default function DatabasePage() {
                     <input 
                       type="checkbox" 
                       className="rounded cursor-pointer accent-accent"
-                      checked={selectedRows.size === sortedFilteredTableData.rows.length && sortedFilteredTableData.rows.length > 0}
+                      checked={sortedFilteredTableData.rows.length > 0 && sortedFilteredTableData.rows.every(row => selectedRows.has(getRowKey(row, sortedFilteredTableData.columns)))}
                       onChange={toggleSelectAll}
                     />
                   </th>
@@ -1166,17 +1213,19 @@ export default function DatabasePage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedFilteredTableData?.rows.map((row, idx) => (
-                  <tr 
-                    key={row.id || idx} 
-                    className={`group transition-all ${selectedRows.has(idx) ? 'bg-selected/50' : ''}`}
+                {sortedFilteredTableData?.rows.map((row, idx) => {
+                  const rowKey = getRowKey(row, sortedFilteredTableData.columns)
+                  return (
+                  <tr
+                    key={rowKey}
+                    className={`group transition-all ${selectedRows.has(rowKey) ? 'bg-selected/50' : ''}`}
                   >
                     <td className="text-center min-w-[32px]">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         className="rounded cursor-pointer accent-accent"
-                        checked={selectedRows.has(idx)}
-                        onChange={() => toggleRowSelection(idx)}
+                        checked={selectedRows.has(rowKey)}
+                        onChange={() => toggleRowSelection(rowKey)}
                       />
                     </td>
                     {sortedFilteredTableData?.columns.map((col) => {
@@ -1230,7 +1279,8 @@ export default function DatabasePage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )}
+              )}
               </tbody>
             </table>
 
@@ -1394,7 +1444,10 @@ export default function DatabasePage() {
           </div>
           
           <div className="p-4 space-y-3">
-            {tableData?.columns.map((col) => (
+            {tableData?.columns
+              // 新增模式下隐藏主键列（id 列）
+              .filter(col => editingRow || !(col === 'id' || col === `${activeTab?.tableName}_id` || col.endsWith('_id')))
+              .map((col) => (
               <div key={col}>
                 <label className="block text-xs text-text-muted mb-1">{col}</label>
                 <input
@@ -1418,9 +1471,11 @@ export default function DatabasePage() {
             </button>
             <button
               onClick={handleSaveRow}
-              className="px-4 py-2 bg-accent text-white rounded text-xs hover:bg-accent/90"
+              disabled={saving}
+              className="px-4 py-2 bg-accent text-white rounded text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              保存
+              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+              {saving ? '保存中...' : '保存'}
             </button>
           </div>
         </div>

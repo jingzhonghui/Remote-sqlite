@@ -2,11 +2,12 @@ import { useState, useCallback, useEffect } from 'react'
 import { 
   Database, Table, Search, RefreshCw, Plus, Trash2, Edit3, Copy, Check,
   ChevronRight, ChevronDown, FileSpreadsheet, Download, Loader2, AlertCircle,
-  WifiOff, Server, X, FolderOpen, Filter
+  WifiOff, Server, X, FolderOpen, Filter, FolderTree
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
 import { Tooltip } from '../components/Tooltip'
+import FileBrowser from '../components/FileBrowser'
 
 // 定义排序状态
 type SortDirection = 'asc' | 'desc' | null
@@ -72,6 +73,9 @@ export default function DatabasePage() {
   const [dbPath, setDbPath] = useState('')
   const [loadingTables, setLoadingTables] = useState(false)
   const [dbPathError, setDbPathError] = useState('')
+  
+  // 文件浏览器状态
+  const [showFileBrowser, setShowFileBrowser] = useState(false)
 
   // 多标签页状态
   const [openTabs, setOpenTabs] = useState<TableTab[]>([])
@@ -1499,15 +1503,26 @@ export default function DatabasePage() {
           <div className="p-4 space-y-4">
             <div>
               <label className="block text-xs text-text-muted mb-1.5">数据库路径</label>
-              <input
-                type="text"
-                value={dbPath}
-                onChange={(e) => { setDbPath(e.target.value); setDbPathError('') }}
-                onKeyDown={(e) => e.key === 'Enter' && loadDatabase()}
-                placeholder="/path/to/database.db"
-                className="w-full"
-                autoFocus
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={dbPath}
+                  onChange={(e) => { setDbPath(e.target.value); setDbPathError('') }}
+                  onKeyDown={(e) => e.key === 'Enter' && loadDatabase()}
+                  placeholder="/path/to/database.db 或点击浏览选择"
+                  className="flex-1"
+                  autoFocus
+                />
+                <button
+                  onClick={() => setShowFileBrowser(true)}
+                  disabled={!activeConnection}
+                  className="px-3 py-2 bg-hover hover:bg-hover/80 rounded text-xs font-medium text-text-dim hover:text-text transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  title="浏览远程文件"
+                >
+                  <FolderTree className="w-4 h-4" />
+                  浏览
+                </button>
+              </div>
               {dbPathError && (
                 <div className="flex items-center gap-1 mt-1.5 text-xs text-error">
                   <AlertCircle className="w-3 h-3" />
@@ -1516,7 +1531,7 @@ export default function DatabasePage() {
               )}
             </div>
             <p className="text-[10px] text-text-muted">
-              请输入远程服务器上的 SQLite 数据库文件路径，例如：/home/user/data/myapp.db
+              请输入远程服务器上的 SQLite 数据库文件路径，例如：/home/user/data/myapp.db，或点击"浏览"按钮选择文件
             </p>
           </div>
 
@@ -1605,6 +1620,17 @@ export default function DatabasePage() {
         </div>
       </div>
     )}
+
+    {/* 文件浏览器 */}
+    <FileBrowser
+      isOpen={showFileBrowser}
+      connectionId={activeConnectionId || ''}
+      onSelect={(path) => {
+        setDbPath(path)
+        setShowFileBrowser(false)
+      }}
+      onClose={() => setShowFileBrowser(false)}
+    />
 
     </>
   )

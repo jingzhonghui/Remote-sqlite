@@ -7,6 +7,19 @@ interface Window {
       connect: (config: SSHConfig) => Promise<{ success: boolean; connectionId: string; message: string }>
       disconnect: (connectionId: string) => Promise<{ success: boolean }>
       listConnections: () => Promise<Array<{ id: string; name: string; host: string; status: string }>>
+      listDirectory: (connectionId: string, dirPath: string) => Promise<{
+        success: boolean
+        path: string
+        parent: string | null
+        items: Array<{
+          name: string
+          type: 'file' | 'directory' | 'link'
+          size: number
+          modified: string
+          isDbFile: boolean
+        }>
+        message?: string
+      }>
     }
     sqlite: {
       execute: (connectionId: string, dbPath: string, sql: string) => Promise<{ success: boolean; affectedRows?: number; message?: string }>

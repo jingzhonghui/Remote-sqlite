@@ -83,6 +83,11 @@ function setupIPC() {
   ipcMain.handle('sqlite:get-indexes', async (_, connectionId, dbPath, tableName) => {
     return sqliteService.getIndexes(connectionId, dbPath, tableName)
   })
+
+  // 远程文件浏览
+  ipcMain.handle('ssh:list-directory', async (_, connectionId, dirPath) => {
+    return sshService.listDirectory(connectionId, dirPath)
+  })
 }
 
 // 移除默认菜单栏

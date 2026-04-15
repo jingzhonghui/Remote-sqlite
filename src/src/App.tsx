@@ -20,9 +20,9 @@ function App() {
     root.classList.add(theme)
   }, [theme])
 
-  // 应用字体大小
+  // 应用字体大小到 html 元素（rem 单位的基准）
   useEffect(() => {
-    document.body.style.fontSize = `${fontSize}px`
+    document.documentElement.style.fontSize = `${fontSize}px`
   }, [fontSize])
 
   return (

@@ -85,7 +85,7 @@ body {
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background: var(--bg);
   color: var(--text);
-  font-size: 13px;
+  font-size: 0.8125rem; /* 13px when base is 16px */
   line-height: 1.5;
   transition: background-color 0.3s ease, color 0.3s ease;
 }

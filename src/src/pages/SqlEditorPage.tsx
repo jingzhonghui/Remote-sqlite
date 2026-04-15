@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { 
   Play, Save, Clock, History, ChevronRight, Table2, 
-  CheckCircle, XCircle, Trash2, Database
+  CheckCircle, XCircle, Trash2, Database, AlertTriangle
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
@@ -27,7 +27,20 @@ export default function SqlEditorPage() {
   const [activeSidebar, setActiveSidebar] = useState<'history' | 'saved'>('history')
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [queryName, setQueryName] = useState('')
+  const [editorLoaded, setEditorLoaded] = useState(false)
+  const [editorLoadError, setEditorLoadError] = useState(false)
   const editorRef = useRef<any>(null)
+
+  // Monaco Editor 加载超时检测
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!editorLoaded && !editorLoadError) {
+        console.warn('Monaco Editor 加载超时，切换到降级模式')
+        setEditorLoadError(true)
+      }
+    }, 5000) // 5秒超时
+    return () => clearTimeout(timer)
+  }, [editorLoaded, editorLoadError])
 
   const handleExecute = async () => {
     if (!activeConnection || !currentDatabase || !sql.trim()) return
@@ -243,24 +256,57 @@ export default function SqlEditorPage() {
 
           {/* Editor */}
           <div className="flex-1 min-h-0">
-            <Editor
-              height="100%"
-              defaultLanguage="sql"
-              value={sql}
-              onChange={(value) => setSql(value || '')}
-              onMount={(editor) => { editorRef.current = editor }}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13,
-                lineNumbers: 'on',
-                roundedSelection: false,
-                scrollBeyondLastLine: false,
-                readOnly: false,
-                automaticLayout: true,
-                theme: theme === 'dark' ? 'vs-dark' : 'vs',
-                padding: { top: 8 },
-              }}
-            />
+            {editorLoadError ? (
+              // 降级方案：当 Monaco Editor 加载失败时使用 textarea
+              <div className="h-full flex flex-col">
+                <div className="bg-warning/10 border-b border-warning/20 px-3 py-1.5 flex items-center gap-2 text-xs text-warning">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>代码编辑器加载失败，已切换到兼容模式</span>
+                </div>
+                <textarea
+                  value={sql}
+                  onChange={(e) => setSql(e.target.value)}
+                  className="flex-1 w-full bg-panel text-text p-4 font-mono text-sm resize-none focus:outline-none"
+                  style={{ 
+                    lineHeight: '1.5',
+                    tabSize: 2,
+                  }}
+                  spellCheck={false}
+                  placeholder="在此输入 SQL 语句..."
+                />
+              </div>
+            ) : (
+              <Editor
+                height="100%"
+                defaultLanguage="sql"
+                value={sql}
+                onChange={(value) => setSql(value || '')}
+                onMount={(editor) => { 
+                  editorRef.current = editor 
+                  setEditorLoaded(true)
+                  setEditorLoadError(false)
+                }}
+                loading={
+                  <div className="h-full flex items-center justify-center text-text-muted">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+                      <span className="text-xs">正在加载编辑器...</span>
+                    </div>
+                  </div>
+                }
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  lineNumbers: 'on',
+                  roundedSelection: false,
+                  scrollBeyondLastLine: false,
+                  readOnly: false,
+                  automaticLayout: true,
+                  theme: theme === 'dark' ? 'vs-dark' : 'vs',
+                  padding: { top: 8 },
+                }}
+              />
+            )}
           </div>
         </div>
         

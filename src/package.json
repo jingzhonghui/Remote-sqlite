@@ -79,6 +79,7 @@
       "node_modules/bcrypt-pbkdf/**/*",
       "node_modules/safer-buffer/**/*",
       "node_modules/tweetnacl/**/*",
+      "node_modules/streamsearch/**/*",
       "node_modules/@monaco-editor/react/**/*",
       "node_modules/monaco-editor/**/*",
       "node_modules/state-local/**/*",

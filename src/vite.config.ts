@@ -52,4 +52,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  optimizeDeps: {
+    include: ['monaco-editor'],
+  },
 })

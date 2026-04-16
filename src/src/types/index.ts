@@ -124,3 +124,11 @@ export interface IndexDefinition {
   columns: string[]
   unique: boolean
 }
+
+// 可视化设计器标签页
+export interface DesignerTab {
+  id: string
+  mode: 'view' | 'create'
+  tableName?: string
+  title: string
+}

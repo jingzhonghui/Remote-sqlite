@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SSHConfig, Connection, ConnectionPool, DatabaseInfo, SqlHistory, TableDesign } from '../types'
+import type { SSHConfig, Connection, ConnectionPool, DatabaseInfo, SqlHistory, TableDesign, DesignerTab } from '../types'
 
 export type Theme = 'dark' | 'light'
 
@@ -28,6 +28,10 @@ interface AppState {
   // 表设计
   currentTableDesign: TableDesign | null
   
+  // 可视化设计器标签页
+  designerTabs: DesignerTab[]
+  activeDesignerTabId: string | null
+  
   // Actions - 连接管理
   addConnection: (config: SSHConfig) => void
   removeConnection: (id: string) => void
@@ -52,6 +56,11 @@ interface AppState {
   removeSavedQuery: (name: string) => void
   setCurrentTableDesign: (design: TableDesign | null) => void
   
+  // Actions - 设计器标签页
+  addDesignerTab: (tab: DesignerTab) => void
+  removeDesignerTab: (tabId: string) => void
+  setActiveDesignerTabId: (tabId: string | null) => void
+  
   // Actions - 主题
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
@@ -75,6 +84,8 @@ export const useAppStore = create<AppState>()(
       sqlHistory: [],
       savedQueries: [],
       currentTableDesign: null,
+      designerTabs: [],
+      activeDesignerTabId: null,
 
       // Actions - 连接管理
       addConnection: (config) =>
@@ -249,6 +260,36 @@ export const useAppStore = create<AppState>()(
         set(() => ({
           currentTableDesign: design,
         })),
+
+      addDesignerTab: (tab) =>
+        set((state) => {
+          const existing = state.designerTabs.find(
+            t => t.mode === tab.mode && t.tableName === tab.tableName
+          )
+          if (existing) {
+            return { activeDesignerTabId: existing.id }
+          }
+          return {
+            designerTabs: [...state.designerTabs, tab],
+            activeDesignerTabId: tab.id,
+          }
+        }),
+
+      removeDesignerTab: (tabId) =>
+        set((state) => {
+          const newTabs = state.designerTabs.filter(t => t.id !== tabId)
+          const closedIdx = state.designerTabs.findIndex(t => t.id === tabId)
+          const newActive = state.activeDesignerTabId === tabId
+            ? (newTabs[closedIdx] || newTabs[closedIdx - 1] || null)?.id || null
+            : state.activeDesignerTabId
+          return {
+            designerTabs: newTabs,
+            activeDesignerTabId: newActive,
+          }
+        }),
+
+      setActiveDesignerTabId: (tabId) =>
+        set(() => ({ activeDesignerTabId: tabId })),
 
       // Actions - 主题
       setTheme: (theme) =>

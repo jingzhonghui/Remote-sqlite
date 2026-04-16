@@ -31,7 +31,7 @@ function App() {
         <ConnectionPage />
       </div>
       <div className="h-full w-full" style={{ display: currentTab === 'database' ? 'block' : 'none' }}>
-        <DatabasePage />
+        <DatabasePage onNavigateToDesigner={() => setCurrentTab('designer')} />
       </div>
       <div className="h-full w-full" style={{ display: currentTab === 'sql' ? 'block' : 'none' }}>
         <SqlEditorPage />

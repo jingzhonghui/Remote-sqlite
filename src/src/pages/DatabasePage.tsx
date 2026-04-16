@@ -2,13 +2,14 @@ import { useState, useCallback, useEffect } from 'react'
 import {
   Database, Table, Search, RefreshCw, Plus, Trash2, Copy, Check,
   ChevronRight, ChevronDown, FileSpreadsheet, Download, Loader2, AlertCircle,
-  WifiOff, Server, X, FolderOpen, Filter, FolderTree, Eye, Trash
+  WifiOff, Server, X, FolderOpen, Filter, FolderTree, Eye, Trash, PlusCircle
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
 import { Tooltip } from '../components/Tooltip'
 import FileBrowser from '../components/FileBrowser'
 import ContextMenu from '../components/ContextMenu'
+import type { DesignerTab } from '../types'
 
 // 定义排序状态
 type SortDirection = 'asc' | 'desc' | null
@@ -47,7 +48,7 @@ function getRowKey(row: any, columns: string[]): string {
   return val !== undefined && val !== null ? String(val) : JSON.stringify(row)
 }
 
-export default function DatabasePage() {
+export default function DatabasePage({ onNavigateToDesigner }: { onNavigateToDesigner: () => void }) {
   const { 
     connectionPool, 
     activeConnectionId, 
@@ -57,6 +58,7 @@ export default function DatabasePage() {
     setCurrentDatabase,
     addDatabase,
     removeDatabase,
+    addDesignerTab,
   } = useAppStore()
   
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
@@ -88,15 +90,10 @@ export default function DatabasePage() {
     x: number
     y: number
     tableName: string | null
-  }>({ isOpen: false, x: 0, y: 0, tableName: null })
+    type: 'table' | 'tablesHeader' | null
+  }>({ isOpen: false, x: 0, y: 0, tableName: null, type: null })
 
-  // 表结构弹窗状态
-  const [showTableStructure, setShowTableStructure] = useState(false)
-  const [tableStructure, setTableStructure] = useState<{
-    columns: any[]
-    indexes: any[]
-    sql: string
-  } | null>(null)
+  // 表结构弹窗状态（已移至可视化设计器标签页）
 
   // 多标签页状态
   const [openTabs, setOpenTabs] = useState<TableTab[]>([])
@@ -315,41 +312,51 @@ export default function DatabasePage() {
     }
   }
 
-  // 右键菜单处理
+  // 表右键菜单处理
   const handleTableContextMenu = (e: React.MouseEvent, tableName: string) => {
     e.preventDefault()
     setContextMenu({
       isOpen: true,
       x: e.clientX,
       y: e.clientY,
-      tableName
+      tableName,
+      type: 'table'
     })
   }
 
-  // 查看表结构
-  const handleViewTableStructure = async (tableName: string) => {
-    if (!activeConnection || !currentDatabase) return
+  // "表" 折叠面板头部右键菜单
+  const handleTablesHeaderContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenu({
+      isOpen: true,
+      x: e.clientX,
+      y: e.clientY,
+      tableName: null,
+      type: 'tablesHeader'
+    })
+  }
 
-    try {
-      // 获取表信息
-      const [infoResult, indexesResult] = await Promise.all([
-        window.electronAPI.sqlite.getTableInfo(activeConnection.id, currentDatabase.path, tableName),
-        window.electronAPI.sqlite.getIndexes(activeConnection.id, currentDatabase.path, tableName)
-      ])
-
-      if (infoResult.success) {
-        setTableStructure({
-          columns: infoResult.columns,
-          indexes: indexesResult.success ? indexesResult.indexes : [],
-          sql: '' // 可以后续添加获取 CREATE TABLE SQL 的功能
-        })
-        setShowTableStructure(true)
-      } else {
-        alert('获取表结构失败: ' + infoResult.message)
-      }
-    } catch (error) {
-      alert('获取表结构失败: ' + (error instanceof Error ? error.message : '未知错误'))
+  // 查看表结构 -> 跳转可视化设计器标签页
+  const handleViewTableStructure = (tableName: string) => {
+    const tab: DesignerTab = {
+      id: `view_${tableName}_${Date.now()}`,
+      mode: 'view',
+      tableName,
+      title: tableName,
     }
+    addDesignerTab(tab)
+    onNavigateToDesigner()
+  }
+
+  // 新建表 -> 跳转可视化设计器新建表标签页
+  const handleNewTable = () => {
+    const tab: DesignerTab = {
+      id: `create_${Date.now()}`,
+      mode: 'create',
+      title: '新建表',
+    }
+    addDesignerTab(tab)
+    onNavigateToDesigner()
   }
 
   // 删除表
@@ -1083,6 +1090,7 @@ export default function DatabasePage() {
                     <div className="mb-1">
                       <button
                         onClick={() => toggleNode('tables')}
+                        onContextMenu={handleTablesHeaderContextMenu}
                         className="flex items-center gap-1.5 w-full px-2 py-1 rounded hover:bg-hover text-xs"
                       >
                         {expandedNodes.has('tables') ? (
@@ -1755,133 +1763,36 @@ export default function DatabasePage() {
       onClose={() => setShowFileBrowser(false)}
     />
 
-    {/* 表右键菜单 */}
+    {/* 右键菜单 */}
     <ContextMenu
       isOpen={contextMenu.isOpen}
       x={contextMenu.x}
       y={contextMenu.y}
       onClose={() => setContextMenu({ ...contextMenu, isOpen: false })}
-      items={[
-        {
-          label: '查看表结构',
-          icon: <Eye className="w-4 h-4" />,
-          onClick: () => contextMenu.tableName && handleViewTableStructure(contextMenu.tableName)
-        },
-        {
-          label: '删除表',
-          icon: <Trash className="w-4 h-4" />,
-          onClick: () => contextMenu.tableName && handleDropTable(contextMenu.tableName),
-          danger: true
-        }
-      ]}
+      items={
+        contextMenu.type === 'tablesHeader'
+          ? [
+              {
+                label: '新建表',
+                icon: <PlusCircle className="w-4 h-4" />,
+                onClick: handleNewTable,
+              },
+            ]
+          : [
+              {
+                label: '查看表结构',
+                icon: <Eye className="w-4 h-4" />,
+                onClick: () => contextMenu.tableName && handleViewTableStructure(contextMenu.tableName),
+              },
+              {
+                label: '删除表',
+                icon: <Trash className="w-4 h-4" />,
+                onClick: () => contextMenu.tableName && handleDropTable(contextMenu.tableName),
+                danger: true,
+              },
+            ]
+      }
     />
-
-    {/* 表结构弹窗 */}
-    {showTableStructure && tableStructure && contextMenu.tableName && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
-        <div 
-          className="absolute inset-0" 
-          onClick={() => setShowTableStructure(false)}
-        />
-        <div className="relative w-[600px] max-h-[80vh] flex flex-col overflow-hidden bg-panel rounded-2xl" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
-          <div className="flex items-center justify-between p-4 border-b border-border">
-            <div>
-              <h2 className="text-lg font-semibold text-text">表结构: {contextMenu.tableName}</h2>
-              <p className="text-xs text-text-muted mt-1">查看表的列定义和索引信息</p>
-            </div>
-            <button
-              onClick={() => setShowTableStructure(false)}
-              className="round-btn p-2 text-text-muted hover:text-text"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-auto p-4 space-y-4">
-            {/* 列信息 */}
-            <div>
-              <h3 className="text-sm font-medium text-text-dim mb-3 flex items-center gap-2">
-                <Table className="w-4 h-4" />
-                列定义 ({tableStructure.columns.length})
-              </h3>
-              <div className="neu-inset rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-header-bg">
-                      <th className="px-3 py-2 text-left">名称</th>
-                      <th className="px-3 py-2 text-left">类型</th>
-                      <th className="px-3 py-2 text-center">非空</th>
-                      <th className="px-3 py-2 text-center">主键</th>
-                      <th className="px-3 py-2 text-left">默认值</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableStructure.columns.map((col) => (
-                      <tr key={col.cid} className="border-t border-border hover:bg-hover">
-                        <td className="px-3 py-2 font-medium">{col.name}</td>
-                        <td className="px-3 py-2 text-text-dim">{col.type}</td>
-                        <td className="px-3 py-2 text-center">
-                          {col.notnull ? <span className="text-success">✓</span> : <span className="text-text-muted">-</span>}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {col.pk ? <span className="text-accent font-bold">PK</span> : <span className="text-text-muted">-</span>}
-                        </td>
-                        <td className="px-3 py-2 text-text-muted">
-                          {col.dflt_value !== null ? col.dflt_value : <span className="italic">NULL</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 索引信息 */}
-            {tableStructure.indexes.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-text-dim mb-3 flex items-center gap-2">
-                  <FileSpreadsheet className="w-4 h-4" />
-                  索引 ({tableStructure.indexes.length})
-                </h3>
-                <div className="neu-inset rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-header-bg">
-                        <th className="px-3 py-2 text-left">索引名</th>
-                        <th className="px-3 py-2 text-center">唯一</th>
-                        <th className="px-3 py-2 text-left">列</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableStructure.indexes.map((idx, i) => (
-                        <tr key={i} className="border-t border-border hover:bg-hover">
-                          <td className="px-3 py-2 font-medium">{idx.name}</td>
-                          <td className="px-3 py-2 text-center">
-                            {idx.unique ? <span className="text-success">✓</span> : <span className="text-text-muted">-</span>}
-                          </td>
-                          <td className="px-3 py-2 text-text-dim">
-                            {idx.columns?.join(', ') || '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 border-t border-border flex justify-end">
-            <button
-              onClick={() => setShowTableStructure(false)}
-              className="px-4 py-2 text-xs bg-accent text-white rounded-lg hover:bg-accent/90"
-            >
-              关闭
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
 
     </>
   )

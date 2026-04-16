@@ -7,6 +7,9 @@ import {
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
 
+const MIN_EDITOR_FONT_SIZE = 8
+const MAX_EDITOR_FONT_SIZE = 32
+
 export default function SqlEditorPage() {
   const { 
     sqlHistory, 
@@ -17,6 +20,8 @@ export default function SqlEditorPage() {
     getActiveConnection,
     currentDatabase,
     theme,
+    fontSize,
+    setFontSize,
   } = useAppStore()
   
   const activeConnection = getActiveConnection()
@@ -29,6 +34,7 @@ export default function SqlEditorPage() {
   const [queryName, setQueryName] = useState('')
   const [editorLoaded, setEditorLoaded] = useState(false)
   const [editorLoadError, setEditorLoadError] = useState(false)
+  const [editorFontSize, setEditorFontSize] = useState(fontSize)
   const editorRef = useRef<any>(null)
 
   // Monaco Editor 加载超时检测
@@ -38,9 +44,35 @@ export default function SqlEditorPage() {
         console.warn('Monaco Editor 加载超时，切换到降级模式')
         setEditorLoadError(true)
       }
-    }, 5000) // 5秒超时
+    }, 5000)
     return () => clearTimeout(timer)
   }, [editorLoaded, editorLoadError])
+
+  // Ctrl+= 放大 / Ctrl+- 缩小 编辑器字体
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey) return
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault()
+        const newSize = Math.min(MAX_EDITOR_FONT_SIZE, editorFontSize + 1)
+        if (newSize !== editorFontSize) {
+          setEditorFontSize(newSize)
+          setFontSize(newSize)
+          if (editorRef.current) editorRef.current.updateOptions({ fontSize: newSize })
+        }
+      } else if (e.key === '-') {
+        e.preventDefault()
+        const newSize = Math.max(MIN_EDITOR_FONT_SIZE, editorFontSize - 1)
+        if (newSize !== editorFontSize) {
+          setEditorFontSize(newSize)
+          setFontSize(newSize)
+          if (editorRef.current) editorRef.current.updateOptions({ fontSize: newSize })
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editorFontSize, setFontSize])
 
   const handleExecute = async () => {
     if (!activeConnection || !currentDatabase || !sql.trim()) return
@@ -251,6 +283,9 @@ export default function SqlEditorPage() {
               <span>{currentDatabase.name}</span>
               <ChevronRight className="w-3.5 h-3.5" />
               <span className="text-accent">{sql.trim().split(/\s+/)[0]}</span>
+              <span className="ml-2 px-1.5 py-0.5 bg-panel rounded text-[10px] text-text-dim" title="Ctrl+= 放大 / Ctrl+- 缩小">
+                字号: {editorFontSize}px
+              </span>
             </div>
           </div>
 
@@ -266,10 +301,11 @@ export default function SqlEditorPage() {
                 <textarea
                   value={sql}
                   onChange={(e) => setSql(e.target.value)}
-                  className="flex-1 w-full bg-panel text-text p-4 font-mono text-sm resize-none focus:outline-none"
+                  className="flex-1 w-full bg-panel text-text p-4 font-mono resize-none focus:outline-none"
                   style={{ 
                     lineHeight: '1.5',
                     tabSize: 2,
+                    fontSize: `${editorFontSize}px`,
                   }}
                   spellCheck={false}
                   placeholder="在此输入 SQL 语句..."
@@ -296,7 +332,7 @@ export default function SqlEditorPage() {
                 }
                 options={{
                   minimap: { enabled: false },
-                  fontSize: 13,
+                  fontSize: editorFontSize,
                   lineNumbers: 'on',
                   roundedSelection: false,
                   scrollBeyondLastLine: false,

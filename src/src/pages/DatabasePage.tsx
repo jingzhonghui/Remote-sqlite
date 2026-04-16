@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
-import { 
-  Database, Table, Search, RefreshCw, Plus, Trash2, Edit3, Copy, Check,
+import {
+  Database, Table, Search, RefreshCw, Plus, Trash2, Copy, Check,
   ChevronRight, ChevronDown, FileSpreadsheet, Download, Loader2, AlertCircle,
   WifiOff, Server, X, FolderOpen, Filter, FolderTree, Eye, Trash
 } from 'lucide-react'
@@ -61,9 +61,13 @@ export default function DatabasePage() {
   
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [searchTerm, setSearchTerm] = useState('')
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editingRow, setEditingRow] = useState<any>(null)
-  const [editFormData, setEditFormData] = useState<Record<string, any>>({})
+
+  
+  // 行内编辑状态
+  const [newRowData, setNewRowData] = useState<Record<string, any> | null>(null)  // 新增行的数据
+  const [editingCell, setEditingCell] = useState<{ rowKey: string; column: string } | null>(null)  // 当前编辑的单元格
+  const [tempCellValue, setTempCellValue] = useState<string>('')  // 编辑中的单元格值
+  const [tableColumns, setTableColumns] = useState<any[]>([])  // 当前表的列结构信息
   const [exporting, setExporting] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv')
@@ -119,13 +123,20 @@ export default function DatabasePage() {
     ))
     
     try {
-      // 查询数据（限制1000条）
-      const sql = `SELECT * FROM "${tableName}" LIMIT 1000`
-      const result = await window.electronAPI.sqlite.query(activeConnection.id, currentDatabase.path, sql)
+      // 同时查询数据和表结构
+      const [dataResult, tableInfoResult] = await Promise.all([
+        window.electronAPI.sqlite.query(activeConnection.id, currentDatabase.path, `SELECT * FROM "${tableName}" LIMIT 1000`),
+        window.electronAPI.sqlite.getTableInfo(activeConnection.id, currentDatabase.path, tableName)
+      ])
       
-      if (result.success) {
+      // 保存表结构信息
+      if (tableInfoResult.success) {
+        setTableColumns(tableInfoResult.columns)
+      }
+      
+      if (dataResult.success) {
         // 查询总行数
-        let totalCount = result.rows.length
+        let totalCount = dataResult.rows.length
         try {
           const countResult = await window.electronAPI.sqlite.query(
             activeConnection.id, 
@@ -133,33 +144,33 @@ export default function DatabasePage() {
             `SELECT COUNT(*) as cnt FROM "${tableName}"`
           )
           if (countResult.success && countResult.rows.length > 0) {
-            totalCount = Number(countResult.rows[0].cnt) || result.rows.length
+            totalCount = Number(countResult.rows[0].cnt) || dataResult.rows.length
           }
         } catch (e) {
           console.error('获取总行数失败:', e)
         }
         
         // 更新标签页数据
-        setOpenTabs(prev => prev.map(tab => 
-          tab.id === tabId ? { 
-            ...tab, 
+        setOpenTabs(prev => prev.map(tab =>
+          tab.id === tabId ? {
+            ...tab,
             loading: false,
             data: {
-              columns: result.columns,
-              rows: result.rows,
+              columns: dataResult.columns,
+              rows: dataResult.rows,
               totalCount,
             }
           } : tab
         ))
       } else {
-        setOpenTabs(prev => prev.map(tab => 
+        setOpenTabs(prev => prev.map(tab =>
           tab.id === tabId ? { ...tab, loading: false, data: { columns: [], rows: [] } } : tab
         ))
-        console.error('查询失败:', result.message)
+        console.error('查询失败:', dataResult.message)
       }
     } catch (error) {
       console.error('加载表数据失败:', error)
-      setOpenTabs(prev => prev.map(tab => 
+      setOpenTabs(prev => prev.map(tab =>
         tab.id === tabId ? { ...tab, loading: false, data: { columns: [], rows: [] } } : tab
       ))
     }
@@ -418,45 +429,6 @@ export default function DatabasePage() {
     }
   }
 
-  // 删除行
-  const handleDeleteRow = async (row: any) => {
-    if (!activeConnection || !currentDatabase || !activeTab) return
-    
-    if (!confirm('确定要删除这条记录吗？此操作不可撤销。')) return
-    
-    try {
-      // 获取主键列名（优先使用 id 或 tableName_id）
-      const primaryKeyCol = tableData?.columns.find(col => 
-        col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
-      ) || tableData?.columns[0]
-      
-      if (!primaryKeyCol) {
-        alert('无法确定主键列，请手动指定删除条件')
-        return
-      }
-      
-      const sql = `DELETE FROM "${activeTab.tableName}" WHERE "${primaryKeyCol}" = ${formatValueForSQL(row[primaryKeyCol])}`
-      
-      const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
-      
-      if (result.success) {
-        // 从选中状态中移除被删除的行
-        const deletedRowKey = getRowKey(row, tableData?.columns || [])
-        setOpenTabs(prev => prev.map(tab =>
-          tab.id === activeTabId
-            ? { ...tab, selectedRows: new Set([...tab.selectedRows].filter(k => k !== deletedRowKey)) }
-            : tab
-        ))
-        // 刷新数据
-        await loadTableData(activeTab.tableName, activeTab.id)
-      } else {
-        alert(`删除失败: ${result.message}`)
-      }
-    } catch (error) {
-      alert(`删除失败: ${error instanceof Error ? error.message : '未知错误'}`)
-    }
-  }
-
   // 切换行选中状态
   const toggleRowSelection = (rowKey: string) => {
     if (!activeTab) return
@@ -619,104 +591,161 @@ export default function DatabasePage() {
     return `'${String(value).replace(/'/g, "''")}'`
   }
   
-  // 保存记录（新增或编辑）
-  const handleSaveRow = async () => {
-    if (!activeConnection || !currentDatabase || !activeTab || saving) return
+  // 检测列是否为自增主键
+  const isAutoIncrementColumn = (columnName: string): boolean => {
+    if (!tableColumns || tableColumns.length === 0) return false
+    const colInfo = tableColumns.find((c: any) => c.name === columnName)
+    if (!colInfo) return false
+    // 在 SQLite 中，INTEGER PRIMARY KEY 是自增的
+    return colInfo.pk === 1 && colInfo.type?.toUpperCase() === 'INTEGER'
+  }
+
+  // 打开新增行模式
+  const openAddModal = () => {
+    if (!tableData || !activeTab) return
+
+    // 创建空行数据，所有字段默认 null
+    const emptyRow: Record<string, any> = {}
+    tableData.columns.forEach(col => {
+      emptyRow[col] = null
+    })
+
+    setNewRowData(emptyRow)
+  }
+  
+  // 取消新增行
+  const cancelAddRow = () => {
+    setNewRowData(null)
+    setEditingCell(null)
+    setTempCellValue('')
+  }
+  
+  // 提交新增行
+  const submitAddRow = async () => {
+    if (!activeConnection || !currentDatabase || !activeTab || !newRowData || saving) return
 
     setSaving(true)
     try {
-      if (editingRow) {
-        // 编辑模式：执行 UPDATE
-        const primaryKeyCol = tableData?.columns.find(col =>
-          col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
-        ) || tableData?.columns[0]
+      // 过滤掉自增主键和 null 值字段
+      const entries = Object.entries(newRowData)
+        .filter(([col, val]) => !isAutoIncrementColumn(col) && val !== null && val !== undefined && String(val).trim() !== '')
 
-        if (!primaryKeyCol) {
-          alert('无法确定主键列')
-          setSaving(false)
-          return
-        }
+      const columns = entries.map(([col]) => col)
+      const values = entries.map(([, val]) => formatValueForSQL(val)).join(', ')
 
-        const setClauses = Object.keys(editFormData)
-          .filter(col => col !== primaryKeyCol)
-          .map(col => `"${col}" = ${formatValueForSQL(editFormData[col])}`)
-          .join(', ')
-
-        const sql = `UPDATE "${activeTab.tableName}" SET ${setClauses} WHERE "${primaryKeyCol}" = ${formatValueForSQL(editingRow[primaryKeyCol])}`
-
+      if (columns.length === 0) {
+        // 如果没有提供任何值，但存在自增主键，则插入一行所有列为默认值
+        const sql = `INSERT INTO "${activeTab.tableName}" DEFAULT VALUES`
         const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
 
         if (result.success) {
-          // 刷新表数据
           await loadTableData(activeTab.tableName, activeTab.id)
-          setShowAddModal(false)
-          setEditingRow(null)
-          alert('更新成功')
-        } else {
-          alert(`更新失败: ${result.message}`)
-        }
-      } else {
-        // 新增模式：执行 INSERT
-        // 过滤掉主键列（id）和空值字段
-        const primaryKeyCol = tableData?.columns.find(col =>
-          col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
-        )
-
-        const entries = Object.entries(editFormData)
-          .filter(([col, val]) => col !== primaryKeyCol && val !== '' && val !== undefined && val !== null)
-
-        const columns = entries.map(([col]) => col)
-        const values = entries.map(([, val]) => formatValueForSQL(val)).join(', ')
-
-        if (columns.length === 0) {
-          alert('请至少填写一个字段')
-          setSaving(false)
-          return
-        }
-
-        const sql = `INSERT INTO "${activeTab.tableName}" ("${columns.join('", "')}") VALUES (${values})`
-
-        const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
-
-        if (result.success) {
-          // 刷新表数据
-          await loadTableData(activeTab.tableName, activeTab.id)
-          setShowAddModal(false)
-          setEditingRow(null)
+          setNewRowData(null)
+          setEditingCell(null)
           alert('新增成功')
         } else {
           alert(`新增失败: ${result.message}`)
         }
+        setSaving(false)
+        return
+      }
+
+      const sql = `INSERT INTO "${activeTab.tableName}" ("${columns.join('", "')}") VALUES (${values})`
+
+      const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
+
+      if (result.success) {
+        // 刷新表数据
+        await loadTableData(activeTab.tableName, activeTab.id)
+        setNewRowData(null)
+        setEditingCell(null)
+        alert('新增成功')
+      } else {
+        alert(`新增失败: ${result.message}`)
       }
     } catch (error) {
-      alert(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      alert(`新增失败: ${error instanceof Error ? error.message : '未知错误'}`)
     } finally {
       setSaving(false)
     }
   }
   
-  // 打开编辑模态框
-  const openEditModal = (row: any) => {
-    const initialData: Record<string, any> = row ? { ...row } : {}
-    // 初始化空值（确保所有列都有对应的键）
-    tableData?.columns.forEach(col => {
-      if (initialData[col] === undefined) {
-        initialData[col] = ''
-      }
-    })
-    setEditingRow(row)
-    setEditFormData(initialData)
+  // 开始编辑单元格
+  const startCellEdit = (rowKey: string, column: string, currentValue: any) => {
+    // 禁止编辑自增主键列
+    if (isAutoIncrementColumn(column)) {
+      return
+    }
+    setEditingCell({ rowKey, column })
+    setTempCellValue(currentValue === null ? '' : String(currentValue))
   }
   
-  // 打开新增模态框
-  const openAddModal = () => {
-    setEditingRow(null)
-    const initialData: Record<string, any> = {}
-    tableData?.columns.forEach(col => {
-      initialData[col] = ''
-    })
-    setEditFormData(initialData)
-    setShowAddModal(true)
+  // 保存单元格编辑
+  const saveCellEdit = async () => {
+    if (!editingCell || !activeConnection || !currentDatabase || !activeTab || !tableData) return
+    
+    const { rowKey, column } = editingCell
+    
+    // 如果是新增行，直接更新本地数据
+    if (newRowData && rowKey === '__new__') {
+      setNewRowData(prev => prev ? { ...prev, [column]: tempCellValue } : null)
+      setEditingCell(null)
+      return
+    }
+    
+    // 找到原始行数据
+    const row = tableData.rows.find(r => getRowKey(r, tableData.columns) === rowKey)
+    if (!row) {
+      setEditingCell(null)
+      return
+    }
+    
+    // 如果值没有变化，直接退出编辑
+    const originalValue = row[column]
+    const newValue = tempCellValue === '' ? null : tempCellValue
+    if ((originalValue === null && newValue === null) || String(originalValue) === String(newValue)) {
+      setEditingCell(null)
+      return
+    }
+    
+    try {
+      // 获取主键列名
+      const primaryKeyCol = tableData.columns.find(col =>
+        col === 'id' || col === `${activeTab.tableName}_id` || col.endsWith('_id')
+      ) || tableData.columns[0]
+
+      if (!primaryKeyCol) {
+        alert('无法确定主键列')
+        setEditingCell(null)
+        return
+      }
+
+      const sql = `UPDATE "${activeTab.tableName}" SET "${column}" = ${formatValueForSQL(newValue)} WHERE "${primaryKeyCol}" = ${formatValueForSQL(row[primaryKeyCol])}`
+
+      const result = await window.electronAPI.sqlite.execute(activeConnection.id, currentDatabase.path, sql)
+
+      if (result.success) {
+        // 刷新表数据
+        await loadTableData(activeTab.tableName, activeTab.id)
+      } else {
+        alert(`更新失败: ${result.message}`)
+      }
+    } catch (error) {
+      alert(`更新失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    } finally {
+      setEditingCell(null)
+    }
+  }
+  
+  // 处理单元格键盘事件
+  const handleCellKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      saveCellEdit()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setEditingCell(null)
+    }
   }
 
   // 列宽拖动相关
@@ -1145,17 +1174,39 @@ export default function DatabasePage() {
         {/* Toolbar */}
         <div className="h-10 bg-toolbar-bg border-b border-border rounded-xl flex items-center justify-between px-3 mx-1">
           <div className="flex items-center gap-2">
-            <button 
-              onClick={openAddModal}
-              disabled={!activeTab}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-medium transition-all neu-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              新增行
-            </button>
+            {/* 新增行相关按钮 */}
+            {!newRowData ? (
+              <button
+                onClick={openAddModal}
+                disabled={!activeTab}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-medium transition-all neu-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                新增行
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={submitAddRow}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-medium transition-all bg-success hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  提交
+                </button>
+                <button
+                  onClick={cancelAddRow}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-medium transition-all bg-error hover:bg-error/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  取消
+                </button>
+              </>
+            )}
             <button 
               onClick={handleBatchDelete}
-              disabled={selectedRows.size === 0}
+              disabled={selectedRows.size === 0 || !!newRowData}
               className="flex items-center gap-1.5 px-3 py-1.5 text-error rounded-xl text-xs font-medium round-btn hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -1164,7 +1215,7 @@ export default function DatabasePage() {
             <div className="w-px h-5 bg-border mx-1" />
             <button 
               onClick={refreshCurrentTab}
-              disabled={!activeTab || loadingTables}
+              disabled={!activeTab || loadingTables || !!newRowData}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium round-btn text-text-muted hover:text-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="刷新当前表数据"
             >
@@ -1173,7 +1224,7 @@ export default function DatabasePage() {
             </button>
             <button 
               onClick={refreshDatabase}
-              disabled={!currentDatabase || loadingTables}
+              disabled={!currentDatabase || loadingTables || !!newRowData}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium round-btn text-text-muted hover:text-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="刷新数据库结构（重新加载表列表）"
             >
@@ -1182,7 +1233,7 @@ export default function DatabasePage() {
             </button>
             <button 
               onClick={handleExport}
-              disabled={!tableData || tableData.rows.length === 0}
+              disabled={!tableData || tableData.rows.length === 0 || !!newRowData}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium round-btn text-text-muted hover:text-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="w-3.5 h-3.5" />
@@ -1261,13 +1312,12 @@ export default function DatabasePage() {
                 {sortedFilteredTableData.columns.map((col) => (
                   <col key={col} style={{ width: getColumnWidth(col), minWidth: '60px' }} />
                 ))}
-                <col className="w-20 min-w-[80px]" />
               </colgroup>
               <thead className="sticky top-0 z-10">
                 <tr>
                   <th className="w-8 min-w-[32px]">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       className="rounded cursor-pointer accent-accent"
                       checked={sortedFilteredTableData.rows.length > 0 && sortedFilteredTableData.rows.every(row => selectedRows.has(getRowKey(row, sortedFilteredTableData.columns)))}
                       onChange={toggleSelectAll}
@@ -1278,7 +1328,7 @@ export default function DatabasePage() {
                     const sortDir = activeTab?.sortDirection
                     return (
                       <th key={col} className="relative">
-                        <div 
+                        <div
                           className="flex items-center gap-1 cursor-pointer select-none"
                           onDoubleClick={() => handleSort(col)}
                         >
@@ -1299,7 +1349,6 @@ export default function DatabasePage() {
                       </th>
                     )
                   })}
-                  <th className="w-20 min-w-[80px]">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -1320,56 +1369,91 @@ export default function DatabasePage() {
                     </td>
                     {sortedFilteredTableData?.columns.map((col) => {
                       const cellValue = row[col]
-                      const displayValue = cellValue === null ? (
-                        <span className="text-text-muted italic">NULL</span>
-                      ) : (
-                        String(cellValue)
-                      )
+                      const isEditing = editingCell?.rowKey === rowKey && editingCell?.column === col
                       const tooltipContent = cellValue === null ? 'NULL' : String(cellValue)
                       const cellKey = `${idx}-${col}-${String(cellValue)}`
                       const isCopied = copiedCell === cellKey
-                      
+
                       return (
-                        <td key={col} className="truncate max-w-[300px] relative group/cell">
-                          <div className="flex items-center pr-6">
-                            <Tooltip content={tooltipContent}>
-                              {displayValue}
-                            </Tooltip>
-                          </div>
-                          <button
-                            onClick={() => copyCell(cellValue, cellKey)}
-                            className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded transition-all ${isCopied ? 'text-success opacity-100' : 'text-warning opacity-0 group-hover/cell:opacity-100 hover:bg-hover'}`}
-                            title="复制"
-                          >
-                            {isCopied ? (
-                              <Check className="w-3.5 h-3.5" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                        <td key={col} className="truncate max-w-[300px] relative group/cell" onDoubleClick={() => !newRowData && startCellEdit(rowKey, col, cellValue)}>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={tempCellValue}
+                              onChange={(e) => setTempCellValue(e.target.value)}
+                              onBlur={saveCellEdit}
+                              onKeyDown={handleCellKeyDown}
+                              className="w-full px-1 py-0.5 text-xs bg-panel border border-accent rounded"
+                              autoFocus
+                            />
+                          ) : (
+                            <>
+                              <div className="flex items-center pr-6">
+                                <Tooltip content={tooltipContent}>
+                                  {cellValue === null ? (
+                                    <span className="text-text-muted italic">NULL</span>
+                                  ) : (
+                                    String(cellValue)
+                                  )}
+                                </Tooltip>
+                              </div>
+                              <button
+                                onClick={() => copyCell(cellValue, cellKey)}
+                                className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded transition-all ${isCopied ? 'text-success opacity-100' : 'text-warning opacity-0 group-hover/cell:opacity-100 hover:bg-hover'}`}
+                                title="复制"
+                              >
+                                {isCopied ? (
+                                  <Check className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </td>
                       )
                     })}
-                    <td>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => openEditModal(row)}
-                          className="p-1.5 rounded-xl round-btn hover:scale-110 transition-all"
-                          title="编辑"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-info" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteRow(row)}
-                          className="p-1.5 rounded-xl round-btn hover:scale-110 transition-all"
-                          title="删除"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-error" />
-                        </button>
-                      </div>
-                    </td>
                   </tr>
                 )}
+              )}
+              {/* 新增行 */}
+              {newRowData && tableData && (
+                <tr className="bg-accent/10 border-b-2 border-accent">
+                  <td className="text-center min-w-[32px]">
+                    <span className="text-[10px] text-accent">新</span>
+                  </td>
+                  {tableData.columns.map((col) => {
+                    const isEditing = editingCell?.rowKey === '__new__' && editingCell?.column === col
+                    const cellValue = newRowData[col]
+                    const isAutoInc = isAutoIncrementColumn(col)
+
+                    return (
+                      <td
+                        key={col}
+                        className={`truncate max-w-[300px] relative ${isAutoInc ? '' : 'cursor-pointer'}`}
+                        onDoubleClick={() => !isAutoInc && startCellEdit('__new__', col, cellValue)}
+                      >
+                        {isAutoInc ? (
+                          <span className="text-text-muted/50 italic">自动</span>
+                        ) : isEditing ? (
+                          <input
+                            type="text"
+                            value={tempCellValue}
+                            onChange={(e) => setTempCellValue(e.target.value)}
+                            onBlur={saveCellEdit}
+                            onKeyDown={handleCellKeyDown}
+                            className="w-full px-1 py-0.5 text-xs bg-panel border border-accent rounded"
+                            autoFocus
+                          />
+                        ) : (
+                          <span className={cellValue === null ? 'text-text-muted/50 italic' : ''}>
+                            {cellValue === null ? 'NULL' : cellValue}
+                          </span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
               )}
               </tbody>
             </table>
@@ -1523,54 +1607,7 @@ export default function DatabasePage() {
       </main>
     </Splitter>
 
-    {/* Add/Edit Modal */}
-    {(showAddModal || editingRow) && (
-      <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
-        <div className="bg-panel rounded-xl w-[500px] max-h-[80vh] overflow-auto" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
-          <div className="p-4 border-b border-border">
-            <h2 className="text-sm font-medium">
-              {editingRow ? '编辑记录' : '新增记录'}
-            </h2>
-          </div>
-          
-          <div className="p-4 space-y-3">
-            {tableData?.columns
-              // 新增模式下隐藏主键列（id 列）
-              .filter(col => editingRow || !(col === 'id' || col === `${activeTab?.tableName}_id` || col.endsWith('_id')))
-              .map((col) => (
-              <div key={col}>
-                <label className="block text-xs text-text-muted mb-1">{col}</label>
-                <input
-                  type="text"
-                  value={editFormData[col] ?? ''}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, [col]: e.target.value }))}
-                  className="w-full"
-                  placeholder={col === 'id' ? '自动生成' : ''}
-                  disabled={col === 'id' && !!editingRow}
-                />
-              </div>
-            ))}
-          </div>
 
-          <div className="p-4 border-t border-border flex justify-end gap-2">
-            <button
-              onClick={() => { setShowAddModal(false); setEditingRow(null) }}
-              className="px-4 py-2 text-xs text-text-muted hover:text-text"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleSaveRow}
-              disabled={saving}
-              className="px-4 py-2 bg-accent text-white rounded text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              {saving ? '保存中...' : '保存'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
 
     {/* 打开数据库 Modal */}
     {showOpenDbModal && (

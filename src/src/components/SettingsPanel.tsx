@@ -28,12 +28,15 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       {/* Backdrop */}
       <div 
         className="absolute inset-0 backdrop-blur-sm" 
-        style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+        style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)' }}
         onClick={onClose}
       />
       
       {/* Panel */}
-      <div className="relative neu-card w-[420px] max-h-[85vh] overflow-hidden p-6">
+      <div 
+        className="relative w-[420px] max-h-[85vh] overflow-hidden p-6 bg-panel rounded-2xl"
+        style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -67,9 +70,10 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   {/* Icon */}
                   <div className={`w-14 h-14 rounded-xl flex items-center justify-center mb-3 transition-all ${
                     theme === option.value
-                      ? 'bg-accent text-white shadow-lg'
+                      ? 'bg-accent text-white'
                       : 'bg-panel'
-                  }`}>
+                  }`}
+                  style={theme === option.value ? { boxShadow: '0 2px 8px rgba(124, 106, 247, 0.4)' } : {}}>
                     {option.icon}
                   </div>
                   
@@ -87,7 +91,7 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   
                   {/* Selected indicator */}
                   {theme === option.value && (
-                    <div className="absolute top-3 right-3 w-3 h-3 rounded-full bg-accent shadow-lg" />
+                    <div className="absolute top-3 right-3 w-3 h-3 rounded-full bg-accent" style={{ boxShadow: '0 1px 4px rgba(124, 106, 247, 0.5)' }} />
                   )}
                 </button>
               ))}

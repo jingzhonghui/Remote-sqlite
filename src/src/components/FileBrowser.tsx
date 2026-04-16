@@ -160,12 +160,15 @@ export default function FileBrowser({ isOpen, connectionId, initialPath = '~', o
       {/* Backdrop */}
       <div 
         className="absolute inset-0 backdrop-blur-sm" 
-        style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+        style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)' }}
         onClick={onClose}
       />
       
       {/* Browser Panel */}
-      <div className="relative neu-card w-[700px] h-[500px] flex flex-col overflow-hidden">
+      <div 
+        className="relative w-[700px] h-[500px] flex flex-col overflow-hidden bg-panel rounded-2xl"
+        style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>

@@ -27,13 +27,13 @@
   --toolbar-bg: #1a1a30;
   --tooltip-bg: #45455a;
   
-  /* 拟态化阴影 - 深色 */
-  --shadow-light: rgba(255, 255, 255, 0.05);
-  --shadow-dark: rgba(0, 0, 0, 0.4);
-  --neu-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
-  --neu-shadow-inset: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
-  --neu-shadow-sm: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
-  --neu-shadow-hover: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
+  /* 拟态化阴影 - 深色（优化后的柔和阴影） */
+  --shadow-light: rgba(255, 255, 255, 0.03);
+  --shadow-dark: rgba(0, 0, 0, 0.25);
+  --neu-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
+  --neu-shadow-inset: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+  --neu-shadow-sm: 2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light);
+  --neu-shadow-hover: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
 }
 
 /* ===========================
@@ -61,13 +61,13 @@
   --toolbar-bg: #dcdce0;
   --tooltip-bg: #ffffff;
   
-  /* 拟态化阴影 - 浅色 */
-  --shadow-light: rgba(255, 255, 255, 0.9);
-  --shadow-dark: rgba(174, 174, 190, 0.5);
-  --neu-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
-  --neu-shadow-inset: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
-  --neu-shadow-sm: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
-  --neu-shadow-hover: 10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light);
+  /* 拟态化阴影 - 浅色（优化后的柔和阴影） */
+  --shadow-light: rgba(255, 255, 255, 0.8);
+  --shadow-dark: rgba(160, 160, 180, 0.35);
+  --neu-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+  --neu-shadow-inset: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+  --neu-shadow-sm: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+  --neu-shadow-hover: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
 }
 
 * {

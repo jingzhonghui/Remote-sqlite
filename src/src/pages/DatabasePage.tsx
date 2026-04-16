@@ -1525,8 +1525,8 @@ export default function DatabasePage() {
 
     {/* Add/Edit Modal */}
     {(showAddModal || editingRow) && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-panel border border-border rounded-lg w-[500px] max-h-[80vh] overflow-auto">
+      <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
+        <div className="bg-panel rounded-xl w-[500px] max-h-[80vh] overflow-auto" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
           <div className="p-4 border-b border-border">
             <h2 className="text-sm font-medium">
               {editingRow ? '编辑记录' : '新增记录'}
@@ -1574,8 +1574,8 @@ export default function DatabasePage() {
 
     {/* 打开数据库 Modal */}
     {showOpenDbModal && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-panel border border-border rounded-lg w-[480px]">
+      <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
+        <div className="bg-panel rounded-xl w-[480px]" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-medium">打开数据库</h2>
             <button
@@ -1643,8 +1643,8 @@ export default function DatabasePage() {
 
     {/* 导出格式选择 Modal */}
     {showExportModal && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-panel border border-border rounded-lg w-[400px]">
+      <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
+        <div className="bg-panel rounded-xl w-[400px]" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-medium">导出数据</h2>
             <button
@@ -1741,13 +1741,12 @@ export default function DatabasePage() {
 
     {/* 表结构弹窗 */}
     {showTableStructure && tableStructure && contextMenu.tableName && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
         <div 
-          className="absolute inset-0 backdrop-blur-sm" 
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          className="absolute inset-0" 
           onClick={() => setShowTableStructure(false)}
         />
-        <div className="relative neu-card w-[600px] max-h-[80vh] flex flex-col overflow-hidden">
+        <div className="relative w-[600px] max-h-[80vh] flex flex-col overflow-hidden bg-panel rounded-2xl" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div>
               <h2 className="text-lg font-semibold text-text">表结构: {contextMenu.tableName}</h2>

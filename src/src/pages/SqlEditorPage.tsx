@@ -365,8 +365,8 @@ export default function SqlEditorPage() {
 
     {/* Save Dialog */}
     {showSaveDialog && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-panel border border-border rounded-lg w-80">
+      <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
+        <div className="bg-panel rounded-xl w-80" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
           <div className="p-4 border-b border-border">
             <h2 className="text-sm font-medium">保存查询</h2>
           </div>

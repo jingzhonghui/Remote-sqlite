@@ -340,7 +340,7 @@ export default function ConnectionPage() {
                       <div className="text-xs text-text-muted">{conn.host}:{conn.port}</div>
                     </div>
                     {activeConnectionId === conn.id && (
-                      <div className="ml-2 w-2.5 h-2.5 rounded-full bg-success shadow-lg animate-pulse" />
+                      <div className="ml-2 w-2.5 h-2.5 rounded-full bg-success animate-pulse" style={{ boxShadow: '0 0 6px rgba(166, 227, 161, 0.6)' }} />
                     )}
                   </div>
                 )
@@ -524,8 +524,8 @@ export default function ConnectionPage() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
-          <div className="neu-card w-[480px] max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.25)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-[480px] max-h-[90vh] overflow-hidden bg-panel rounded-2xl" style={{ boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
             <div className="p-5 border-b border-border">
               <h2 className="text-lg font-semibold">{editingId ? '编辑连接' : '新建连接'}</h2>
               <p className="text-xs text-text-muted mt-1">配置 SSH 连接信息</p>

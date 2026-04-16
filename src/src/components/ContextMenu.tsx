@@ -69,8 +69,12 @@ export default function ContextMenu({ isOpen, x, y, items, onClose }: ContextMen
   return (
     <div
       ref={menuRef}
-      className="fixed z-[100] min-w-[180px] bg-panel border border-border rounded-lg shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100"
-      style={{ left: adjustedX, top: adjustedY }}
+      className="fixed z-[100] min-w-[180px] bg-panel border border-border rounded-lg py-1 animate-in fade-in zoom-in-95 duration-100"
+      style={{ 
+        left: adjustedX, 
+        top: adjustedY,
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15)'
+      }}
     >
       {items.map((item, index) => (
         <button

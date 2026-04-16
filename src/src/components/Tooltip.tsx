@@ -74,12 +74,13 @@ export function Tooltip({ content, children, className = '' }: TooltipProps) {
       {visible && (
         <div
           ref={tooltipRef}
-          className="fixed z-50 px-2 py-1.5 text-xs text-left border border-border rounded-lg shadow-lg max-w-[400px] break-all whitespace-pre-wrap pointer-events-none"
+          className="fixed z-50 px-2 py-1.5 text-xs text-left border border-border rounded-lg max-w-[400px] break-all whitespace-pre-wrap pointer-events-none"
           style={{
             top: position.top,
             left: position.left,
             backgroundColor: 'var(--tooltip-bg)',
             color: 'var(--text)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1)',
           }}
         >
           {content}

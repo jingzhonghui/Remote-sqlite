@@ -21,7 +21,6 @@ export default function SqlEditorPage() {
     currentDatabase,
     theme,
     fontSize,
-    setFontSize,
   } = useAppStore()
   
   const activeConnection = getActiveConnection()
@@ -48,31 +47,29 @@ export default function SqlEditorPage() {
     return () => clearTimeout(timer)
   }, [editorLoaded, editorLoadError])
 
-  // Ctrl+= 放大 / Ctrl+- 缩小 编辑器字体
+  // Ctrl+= 放大 / Ctrl+- 缩小 编辑器字体（仅影响编辑器，不影响全局）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!e.ctrlKey) return
       if (e.key === '=' || e.key === '+') {
         e.preventDefault()
-        const newSize = Math.min(MAX_EDITOR_FONT_SIZE, editorFontSize + 1)
-        if (newSize !== editorFontSize) {
-          setEditorFontSize(newSize)
-          setFontSize(newSize)
+        setEditorFontSize(prev => {
+          const newSize = Math.min(MAX_EDITOR_FONT_SIZE, prev + 1)
           if (editorRef.current) editorRef.current.updateOptions({ fontSize: newSize })
-        }
+          return newSize
+        })
       } else if (e.key === '-') {
         e.preventDefault()
-        const newSize = Math.max(MIN_EDITOR_FONT_SIZE, editorFontSize - 1)
-        if (newSize !== editorFontSize) {
-          setEditorFontSize(newSize)
-          setFontSize(newSize)
+        setEditorFontSize(prev => {
+          const newSize = Math.max(MIN_EDITOR_FONT_SIZE, prev - 1)
           if (editorRef.current) editorRef.current.updateOptions({ fontSize: newSize })
-        }
+          return newSize
+        })
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editorFontSize, setFontSize])
+  }, [])
 
   const handleExecute = async () => {
     if (!activeConnection || !currentDatabase || !sql.trim()) return

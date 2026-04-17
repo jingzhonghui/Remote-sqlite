@@ -42,9 +42,12 @@ export default function SqlEditorPage() {
   const { 
     sqlHistory, 
     savedQueries, 
-    addSqlHistory, 
+    addSqlHistory,
+    removeSqlHistory,
+    clearSqlHistory,
     saveQuery, 
     removeSavedQuery,
+    clearSavedQueries,
     getActiveConnection,
     currentDatabase,
     theme,
@@ -487,62 +490,114 @@ export default function SqlEditorPage() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-2">
-          {activeSidebar === 'history' ? (
-            <div className="space-y-1">
-              {sqlHistory.length === 0 ? (
-                <p className="text-xs text-text-muted text-center py-4">暂无历史记录</p>
-              ) : (
-                sqlHistory.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => loadQuery(item.sql)}
-                    className="w-full text-left p-2 rounded hover:bg-hover group"
-                  >
-                    <div className="flex items-start gap-2">
-                      {item.success ? (
-                        <CheckCircle className="w-3.5 h-3.5 text-success flex-shrink-0 mt-0.5" />
-                      ) : (
-                        <XCircle className="w-3.5 h-3.5 text-error flex-shrink-0 mt-0.5" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-text-dim truncate">{item.sql.slice(0, 50)}...</p>
-                        <p className="text-[10px] text-text-muted mt-1">
-                          {item.executionTime}ms · {item.timestamp.toLocaleTimeString()}
-                        </p>
-                      </div>
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {/* 标题栏 + 清空按钮 */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-toolbar-bg">
+            <span className="text-xs font-medium text-text-dim">
+              {activeSidebar === 'history' ? `历史记录 (${sqlHistory.length})` : `已保存 (${savedQueries.length})`}
+            </span>
+            {activeSidebar === 'history' ? (
+              sqlHistory.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('确定要清空所有历史记录吗？')) {
+                      clearSqlHistory()
+                    }
+                  }}
+                  className="text-[10px] text-text-muted hover:text-error flex items-center gap-1 px-2 py-1 rounded hover:bg-hover"
+                  title="清空历史记录"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  清空
+                </button>
+              )
+            ) : (
+              savedQueries.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('确定要清空所有保存的查询吗？')) {
+                      clearSavedQueries()
+                    }
+                  }}
+                  className="text-[10px] text-text-muted hover:text-error flex items-center gap-1 px-2 py-1 rounded hover:bg-hover"
+                  title="清空保存的查询"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  清空
+                </button>
+              )
+            )}
+          </div>
+
+          <div className="flex-1 overflow-auto p-2">
+            {activeSidebar === 'history' ? (
+              <div className="space-y-1">
+                {sqlHistory.length === 0 ? (
+                  <p className="text-xs text-text-muted text-center py-4">暂无历史记录</p>
+                ) : (
+                  sqlHistory.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 p-2 rounded hover:bg-hover group"
+                    >
+                      <button
+                        onClick={() => loadQuery(item.sql)}
+                        className="flex-1 text-left"
+                      >
+                        <div className="flex items-start gap-2">
+                          {item.success ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-success flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-error flex-shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-text-dim truncate">{item.sql.slice(0, 50)}...</p>
+                            <p className="text-[10px] text-text-muted mt-1">
+                              {item.executionTime}ms · {item.timestamp.toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => removeSqlHistory(item.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-hover rounded flex-shrink-0"
+                        title="删除此记录"
+                      >
+                        <Trash2 className="w-3 h-3 text-error" />
+                      </button>
                     </div>
-                  </button>
-                ))
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {savedQueries.length === 0 ? (
-                <p className="text-xs text-text-muted text-center py-4">暂无保存的查询</p>
-              ) : (
-                savedQueries.map((item) => (
-                  <div
-                    key={item.name}
-                    className="flex items-center gap-2 p-2 rounded hover:bg-hover group"
-                  >
-                    <button
-                      onClick={() => loadQuery(item.sql)}
-                      className="flex-1 text-left"
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {savedQueries.length === 0 ? (
+                  <p className="text-xs text-text-muted text-center py-4">暂无保存的查询</p>
+                ) : (
+                  savedQueries.map((item) => (
+                    <div
+                      key={item.name}
+                      className="flex items-center gap-2 p-2 rounded hover:bg-hover group"
                     >
-                      <p className="text-xs text-text-dim truncate">{item.name}</p>
-                    </button>
-                    <button
-                      onClick={() => removeSavedQuery(item.name)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-hover rounded"
-                    >
-                      <Trash2 className="w-3 h-3 text-error" />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+                      <button
+                        onClick={() => loadQuery(item.sql)}
+                        className="flex-1 text-left"
+                      >
+                        <p className="text-xs text-text-dim truncate">{item.name}</p>
+                      </button>
+                      <button
+                        onClick={() => removeSavedQuery(item.name)}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-hover rounded flex-shrink-0"
+                        title="删除此查询"
+                      >
+                        <Trash2 className="w-3 h-3 text-error" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </aside>
       

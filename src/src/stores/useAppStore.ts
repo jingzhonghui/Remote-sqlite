@@ -52,8 +52,11 @@ interface AppState {
   
   // Actions - SQL
   addSqlHistory: (history: SqlHistory) => void
+  removeSqlHistory: (id: string) => void
+  clearSqlHistory: () => void
   saveQuery: (name: string, sql: string) => void
   removeSavedQuery: (name: string) => void
+  clearSavedQueries: () => void
   setCurrentTableDesign: (design: TableDesign | null) => void
   
   // Actions - 设计器标签页
@@ -246,6 +249,16 @@ export const useAppStore = create<AppState>()(
           sqlHistory: [history, ...state.sqlHistory.slice(0, 99)],
         })),
 
+      removeSqlHistory: (id) =>
+        set((state) => ({
+          sqlHistory: state.sqlHistory.filter((h) => h.id !== id),
+        })),
+
+      clearSqlHistory: () =>
+        set(() => ({
+          sqlHistory: [],
+        })),
+
       saveQuery: (name, sql) =>
         set((state) => ({
           savedQueries: [...state.savedQueries.filter((q) => q.name !== name), { name, sql }],
@@ -254,6 +267,11 @@ export const useAppStore = create<AppState>()(
       removeSavedQuery: (name) =>
         set((state) => ({
           savedQueries: state.savedQueries.filter((q) => q.name !== name),
+        })),
+
+      clearSavedQueries: () =>
+        set(() => ({
+          savedQueries: [],
         })),
 
       setCurrentTableDesign: (design) =>

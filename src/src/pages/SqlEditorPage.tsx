@@ -3,10 +3,13 @@ import Editor from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { 
   Play, Save, Clock, History, ChevronRight, Table2, 
-  CheckCircle, XCircle, Trash2, Database, AlertTriangle
+  CheckCircle, XCircle, Trash2, Database, AlertTriangle, Copy, Check
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
+import { Tooltip } from '../components/Tooltip'
+
+type SortDirection = 'asc' | 'desc' | null
 
 // SQL 关键字列表
 const SQL_KEYWORDS = [
@@ -61,6 +64,13 @@ export default function SqlEditorPage() {
   const [editorFontSize, setEditorFontSize] = useState(fontSize)
   const editorRef = useRef<any>(null)
   const monacoRef = useRef<typeof monaco | null>(null)
+
+  // 查询结果表格相关状态
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null)
+  const [resizing, setResizing] = useState<{ column: string; startX: number; startWidth: number } | null>(null)
+  const [copiedCell, setCopiedCell] = useState<string | null>(null)
   
   // 数据库 schema 缓存，用于智能提示
   const [dbSchema, setDbSchema] = useState<{
@@ -341,6 +351,102 @@ export default function SqlEditorPage() {
     setSql(formatted)
   }
 
+  // ========== 结果表格相关函数 ==========
+
+  // 获取列宽
+  const getColumnWidth = (column: string) => columnWidths[column] || 150
+
+  // 列宽拖动开始
+  const handleResizeStart = useCallback((e: React.MouseEvent, column: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const currentWidth = columnWidths[column] || 150
+    setResizing({ column, startX: e.clientX, startWidth: currentWidth })
+  }, [columnWidths])
+
+  // 列宽拖动中
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!resizing) return
+    const diff = e.clientX - resizing.startX
+    const newWidth = Math.max(60, resizing.startWidth + diff)
+    setColumnWidths(prev => ({ ...prev, [resizing.column]: newWidth }))
+  }, [resizing])
+
+  // 列宽拖动结束
+  const handleResizeEnd = useCallback(() => {
+    setResizing(null)
+  }, [])
+
+  // 添加全局鼠标事件监听
+  useEffect(() => {
+    if (resizing) {
+      document.addEventListener('mousemove', handleResizeMove)
+      document.addEventListener('mouseup', handleResizeEnd)
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove)
+        document.removeEventListener('mouseup', handleResizeEnd)
+      }
+    }
+  }, [resizing, handleResizeMove, handleResizeEnd])
+
+  // 双击表头排序
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // 切换排序方向: asc -> desc -> null
+      if (sortDirection === 'asc') {
+        setSortDirection('desc')
+      } else if (sortDirection === 'desc') {
+        setSortDirection(null)
+        setSortColumn(null)
+      } else {
+        setSortDirection('asc')
+      }
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  // 获取排序后的数据
+  const getSortedData = () => {
+    if (!result || !sortColumn || !sortDirection) return result
+
+    const sortedRows = [...result.rows].sort((a, b) => {
+      const aVal = a[sortColumn]
+      const bVal = b[sortColumn]
+
+      // 处理 null 值
+      if (aVal === null && bVal === null) return 0
+      if (aVal === null) return 1
+      if (bVal === null) return -1
+
+      // 数字比较
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
+      }
+
+      // 字符串比较
+      const aStr = String(aVal).toLowerCase()
+      const bStr = String(bVal).toLowerCase()
+      if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1
+      if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return { ...result, rows: sortedRows }
+  }
+
+  // 复制单元格数据
+  const copyCell = (value: any, cellKey: string) => {
+    const text = value === null ? 'NULL' : String(value)
+    navigator.clipboard.writeText(text)
+    setCopiedCell(cellKey)
+    setTimeout(() => setCopiedCell(null), 1500)
+  }
+
+  // 获取显示的数据（排序后）
+  const displayResult = getSortedData()
+
   if (!activeConnection || !currentDatabase) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-text-muted">
@@ -565,38 +671,94 @@ export default function SqlEditorPage() {
             <span className="text-xs font-medium">查询结果</span>
             {result && (
               <span className="text-xs text-text-muted ml-4">
-                {result.rowCount ?? result.rows.length} 行 · {result.executionTime}ms
+                {displayResult?.rows.length ?? 0} 行 · {result.executionTime}ms
+                {sortColumn && sortDirection && (
+                  <span className="ml-2 text-accent">
+                    · 排序: {sortColumn} {sortDirection === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
               </span>
             )}
           </div>
 
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto mx-1 my-1 rounded-xl">
             {error ? (
               <div className="p-4 text-error text-sm flex items-center gap-2">
                 <XCircle className="w-4 h-4" />
                 {error}
               </div>
-            ) : result ? (
-              <table className="w-full text-xs">
-                <thead>
+            ) : displayResult ? (
+              <table className="w-full text-xs table-fixed">
+                <colgroup>
+                  {displayResult.columns.map((col) => (
+                    <col key={col} style={{ width: getColumnWidth(col), minWidth: '60px' }} />
+                  ))}
+                </colgroup>
+                <thead className="sticky top-0 z-10">
                   <tr>
-                    {result.columns.map((col) => (
-                      <th key={col} className="whitespace-nowrap">{col}</th>
-                    ))}
+                    {displayResult.columns.map((col) => {
+                      const isSorted = sortColumn === col
+                      return (
+                        <th key={col} className="relative">
+                          <div
+                            className="flex items-center gap-1 cursor-pointer select-none"
+                            onDoubleClick={() => handleSort(col)}
+                          >
+                            <span className="block truncate">{col}</span>
+                            {isSorted && sortDirection && (
+                              <span className="text-accent flex-shrink-0">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                            {!isSorted && (
+                              <span className="text-text-muted/30 flex-shrink-0 text-[8px]">⇅</span>
+                            )}
+                          </div>
+                          <div
+                            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors"
+                            onMouseDown={(e) => handleResizeStart(e, col)}
+                          />
+                        </th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody>
-                  {result.rows.map((row, idx) => (
-                    <tr key={idx}>
-                      {result.columns.map((col) => (
-                        <td key={col} className="whitespace-nowrap">
-                          {row[col] === null ? (
-                            <span className="text-text-muted italic">NULL</span>
-                          ) : (
-                            String(row[col])
-                          )}
-                        </td>
-                      ))}
+                  {displayResult.rows.map((row, idx) => (
+                    <tr key={idx} className="group transition-all hover:bg-hover/50">
+                      {displayResult.columns.map((col) => {
+                        const cellValue = row[col]
+                        const tooltipContent = cellValue === null ? 'NULL' : String(cellValue)
+                        const cellKey = `${idx}-${col}-${String(cellValue)}`
+                        const isCopied = copiedCell === cellKey
+
+                        return (
+                          <td key={col} className="truncate max-w-[300px] relative group/cell">
+                            <Tooltip content={tooltipContent}>
+                              <div className="flex items-center pr-6">
+                                {cellValue === null ? (
+                                  <span className="text-text-muted italic">NULL</span>
+                                ) : (
+                                  <span className="truncate">{String(cellValue)}</span>
+                                )}
+                              </div>
+                            </Tooltip>
+                            <button
+                              onClick={() => copyCell(cellValue, cellKey)}
+                              className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded transition-all ${
+                                isCopied ? 'text-success opacity-100' : 'text-warning opacity-0 group-hover/cell:opacity-100 hover:bg-hover'
+                              }`}
+                              title="复制"
+                            >
+                              {isCopied ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
                 </tbody>

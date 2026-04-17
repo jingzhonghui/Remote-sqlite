@@ -1,11 +1,36 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
+import * as monaco from 'monaco-editor'
 import { 
   Play, Save, Clock, History, ChevronRight, Table2, 
   CheckCircle, XCircle, Trash2, Database, AlertTriangle
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
+
+// SQL 关键字列表
+const SQL_KEYWORDS = [
+  'SELECT', 'FROM', 'WHERE', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP',
+  'TABLE', 'INDEX', 'VIEW', 'TRIGGER', 'ALTER', 'ADD', 'COLUMN', 'VALUES',
+  'AND', 'OR', 'NOT', 'NULL', 'IS', 'IN', 'BETWEEN', 'LIKE', 'EXISTS',
+  'ORDER', 'BY', 'ASC', 'DESC', 'LIMIT', 'OFFSET', 'GROUP', 'HAVING',
+  'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'CROSS', 'ON',
+  'AS', 'DISTINCT', 'ALL', 'UNION', 'INTERSECT', 'EXCEPT', 'WITH',
+  'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'IF', 'WHILE', 'FOR',
+  'PRAGMA', 'ATTACH', 'DETACH', 'VACUUM', 'ANALYZE', 'REINDEX',
+  'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'SAVEPOINT', 'RELEASE'
+]
+
+// SQLite 函数列表
+const SQLITE_FUNCTIONS = [
+  'ABS', 'AVG', 'COUNT', 'MAX', 'MIN', 'SUM', 'TOTAL',
+  'LENGTH', 'LOWER', 'UPPER', 'SUBSTR', 'TRIM', 'REPLACE',
+  'ROUND', 'RANDOM', 'COALESCE', 'IFNULL', 'NULLIF',
+  'DATE', 'TIME', 'DATETIME', 'JULIANDAY', 'STRFTIME',
+  'CHANGES', 'LAST_INSERT_ROWID', 'SQLITE_VERSION',
+  'GLOB', 'LIKE', 'INSTR', 'PRINTF', 'QUOTE',
+  'HEX', 'UNICODE', 'SOUNDEX'
+]
 
 const MIN_EDITOR_FONT_SIZE = 8
 const MAX_EDITOR_FONT_SIZE = 32
@@ -35,6 +60,54 @@ export default function SqlEditorPage() {
   const [editorLoadError, setEditorLoadError] = useState(false)
   const [editorFontSize, setEditorFontSize] = useState(fontSize)
   const editorRef = useRef<any>(null)
+  const monacoRef = useRef<typeof monaco | null>(null)
+  
+  // 数据库 schema 缓存，用于智能提示
+  const [dbSchema, setDbSchema] = useState<{
+    tables: string[]
+    columns: Record<string, string[]>
+  }>({ tables: [], columns: {} })
+  // 使用 ref 保存最新 schema，确保 Monaco 提示回调能获取最新数据
+  const dbSchemaRef = useRef(dbSchema)
+  useEffect(() => {
+    dbSchemaRef.current = dbSchema
+  }, [dbSchema])
+
+  // 加载数据库 schema（表名和列名）用于智能提示
+  const loadDatabaseSchema = useCallback(async () => {
+    if (!activeConnection || !currentDatabase) return
+    try {
+      // 获取所有表名
+      const tablesResult = await window.electronAPI.sqlite.getTables(activeConnection.id, currentDatabase.path)
+      if (!tablesResult.success) return
+      
+      const tables = tablesResult.tables
+      const columns: Record<string, string[]> = {}
+      
+      // 获取每个表的列信息
+      for (const tableName of tables.slice(0, 20)) { // 限制前20个表避免过多请求
+        try {
+          const infoResult = await window.electronAPI.sqlite.getTableInfo(activeConnection.id, currentDatabase.path, tableName)
+          if (infoResult.success) {
+            columns[tableName] = infoResult.columns.map((c: any) => c.name)
+          }
+        } catch (e) {
+          console.warn(`获取表 ${tableName} 列信息失败:`, e)
+        }
+      }
+      
+      setDbSchema({ tables, columns })
+    } catch (e) {
+      console.error('加载数据库 schema 失败:', e)
+    }
+  }, [activeConnection, currentDatabase])
+
+  // 当数据库变化时重新加载 schema
+  useEffect(() => {
+    if (activeConnection && currentDatabase) {
+      loadDatabaseSchema()
+    }
+  }, [activeConnection, currentDatabase, loadDatabaseSchema])
 
   // Monaco Editor 加载超时检测
   useEffect(() => {
@@ -43,9 +116,118 @@ export default function SqlEditorPage() {
         console.warn('Monaco Editor 加载超时，切换到降级模式')
         setEditorLoadError(true)
       }
-    }, 5000)
+    }, 15000) // 增加超时时间到 15 秒
     return () => clearTimeout(timer)
   }, [editorLoaded, editorLoadError])
+
+  // 设置 SQL 智能提示
+  const setupSqlCompletion = useCallback((monacoInstance: typeof monaco) => {
+    // 注册 SQL 自动完成提供程序
+    const disposable = monacoInstance.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['.', ' ', '('],
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position)
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn
+        }
+
+        // 获取当前行内容以判断上下文
+        const lineContent = model.getLineContent(position.lineNumber)
+        const textBeforeCursor = lineContent.substring(0, position.column - 1).toUpperCase()
+
+        const suggestions: monaco.languages.CompletionItem[] = []
+        
+        // 使用 ref 获取最新的 schema 数据
+        const currentSchema = dbSchemaRef.current
+
+        // 检测是否在表名上下文中（FROM, JOIN, INTO, UPDATE, TABLE, DROP, ALTER等）
+        const isTableContext = /\b(FROM|JOIN|INTO|UPDATE|TABLE|DROP|ALTER|DELETE\s+FROM|INSERT\s+INTO)\b/i.test(textBeforeCursor)
+
+        // 检测是否在列名上下文中（SELECT, WHERE, SET, ORDER, GROUP, BY, AND, OR, HAVING等）
+        const isColumnContext = /\b(SELECT|WHERE|SET|ORDER|GROUP|BY|AND|OR|HAVING|ON|SET|VALUES)\b/i.test(textBeforeCursor)
+
+        // 1. 表名提示 - 在表名上下文中优先提示
+        if (isTableContext && currentSchema.tables.length > 0) {
+          currentSchema.tables.forEach(tableName => {
+            suggestions.push({
+              label: tableName,
+              kind: monacoInstance.languages.CompletionItemKind.Class,
+              insertText: tableName,
+              detail: '数据库表',
+              sortText: '0', // 表名上下文中优先排序
+              range
+            })
+          })
+        }
+
+        // 2. 列名提示 - 在列名上下文中提示
+        if (isColumnContext) {
+          // 收集所有列名
+          const allColumns = new Set<string>()
+          Object.values(currentSchema.columns).forEach(cols => {
+            cols.forEach(col => allColumns.add(col))
+          })
+
+          allColumns.forEach(colName => {
+            suggestions.push({
+              label: colName,
+              kind: monacoInstance.languages.CompletionItemKind.Field,
+              insertText: colName,
+              detail: '列',
+              sortText: '1',
+              range
+            })
+          })
+
+          // 表名.列名 格式
+          Object.entries(currentSchema.columns).forEach(([tableName, cols]) => {
+            cols.forEach(colName => {
+              suggestions.push({
+                label: `${tableName}.${colName}`,
+                kind: monacoInstance.languages.CompletionItemKind.Field,
+                insertText: `${tableName}.${colName}`,
+                detail: `${tableName} 表的列`,
+                sortText: '1',
+                range
+              })
+            })
+          })
+        }
+
+        // 3. SQL 关键字提示 - 始终提供
+        SQL_KEYWORDS.forEach(keyword => {
+          suggestions.push({
+            label: keyword,
+            kind: monacoInstance.languages.CompletionItemKind.Keyword,
+            insertText: keyword,
+            detail: '关键字',
+            sortText: '3',
+            range
+          })
+        })
+
+        // 4. SQLite 函数提示 - 始终提供
+        SQLITE_FUNCTIONS.forEach(func => {
+          suggestions.push({
+            label: func,
+            kind: monacoInstance.languages.CompletionItemKind.Function,
+            insertText: `${func}()`,
+            insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'SQLite 函数',
+            sortText: '3',
+            range
+          })
+        })
+
+        return { suggestions }
+      }
+    })
+
+    return disposable
+  }, [])
 
   // Ctrl+= 放大 / Ctrl+- 缩小 编辑器字体（仅影响编辑器，不影响全局）
   useEffect(() => {
@@ -71,8 +253,24 @@ export default function SqlEditorPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // 获取要执行的 SQL：优先使用选中的文本，否则使用全部
+  const getExecutableSql = (): string => {
+    if (!editorRef.current) return sql.trim()
+    
+    const selection = editorRef.current.getSelection()
+    if (!selection || selection.isEmpty()) {
+      return sql.trim()
+    }
+    
+    const selectedText = editorRef.current.getModel().getValueInRange(selection)
+    return selectedText.trim() || sql.trim()
+  }
+
   const handleExecute = async () => {
-    if (!activeConnection || !currentDatabase || !sql.trim()) return
+    if (!activeConnection || !currentDatabase) return
+    
+    const executableSql = getExecutableSql()
+    if (!executableSql) return
     
     setLoading(true)
     setError(null)
@@ -83,7 +281,7 @@ export default function SqlEditorPage() {
       const execResult = await window.electronAPI.sqlite.query(
         activeConnection.id, 
         currentDatabase.path, 
-        sql.trim()
+        executableSql
       )
       
       if (execResult.success) {
@@ -99,7 +297,7 @@ export default function SqlEditorPage() {
 
       addSqlHistory({
         id: `hist_${Date.now()}`,
-        sql: sql.trim(),
+        sql: executableSql,
         timestamp: new Date(),
         executionTime: Date.now() - startTime,
         success: true,
@@ -109,7 +307,7 @@ export default function SqlEditorPage() {
       setResult(null)
       addSqlHistory({
         id: `hist_${Date.now()}`,
-        sql: sql.trim(),
+        sql: executableSql,
         timestamp: new Date(),
         executionTime: Date.now() - startTime,
         success: false,
@@ -314,10 +512,28 @@ export default function SqlEditorPage() {
                 defaultLanguage="sql"
                 value={sql}
                 onChange={(value) => setSql(value || '')}
-                onMount={(editor) => { 
-                  editorRef.current = editor 
+                onMount={(editor, monacoInstance) => {
+                  editorRef.current = editor
+                  monacoRef.current = monacoInstance
                   setEditorLoaded(true)
                   setEditorLoadError(false)
+
+                  // 配置编辑器以增强 SQL 支持
+                  monacoInstance.languages.setLanguageConfiguration('sql', {
+                    wordPattern: /[a-zA-Z_][a-zA-Z0-9_]*/,
+                    indentationRules: {
+                      increaseIndentPattern: /\b(BEGIN|CASE|CREATE|INSERT|UPDATE|DELETE|SELECT)\b/i,
+                      decreaseIndentPattern: /\b(END|COMMIT|ROLLBACK)\b/i
+                    }
+                  })
+
+                  // 设置 SQL 智能提示
+                  const disposable = setupSqlCompletion(monacoInstance)
+
+                  // 清理函数
+                  editor.onDidDispose(() => {
+                    disposable?.dispose()
+                  })
                 }}
                 loading={
                   <div className="h-full flex items-center justify-center text-text-muted">

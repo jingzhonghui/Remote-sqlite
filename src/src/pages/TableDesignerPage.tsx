@@ -273,10 +273,10 @@ function TableCreateEditor() {
                     <th className="text-left">列名</th>
                     <th className="text-left w-28">类型</th>
                     <th className="text-center w-20">长度</th>
-                    <th className="text-center w-16">PK</th>
-                    <th className="text-center w-16">AI</th>
-                    <th className="text-center w-16">NN</th>
-                    <th className="text-center w-16">UQ</th>
+                    <th className="text-center w-16" title="主键">主键</th>
+                    <th className="text-center w-16" title="自增">自增</th>
+                    <th className="text-center w-16" title="非空">非空</th>
+                    <th className="text-center w-16" title="唯一">唯一</th>
                     <th className="text-left w-32">默认值</th>
                     <th className="text-center w-20">操作</th>
                   </tr>
@@ -286,8 +286,8 @@ function TableCreateEditor() {
                     <tr key={col.id} className="border-t border-border">
                       <td className="text-center">
                         <div className="flex flex-col items-center gap-0.5">
-                          <button onClick={() => moveColumn(col.id, 'up')} disabled={idx === 0} className="p-0.5 hover:bg-hover rounded disabled:opacity-30"><ArrowUp className="w-3 h-3" /></button>
-                          <button onClick={() => moveColumn(col.id, 'down')} disabled={idx === columns.length - 1} className="p-0.5 hover:bg-hover rounded disabled:opacity-30"><ArrowDown className="w-3 h-3" /></button>
+                          <button onClick={() => moveColumn(col.id, 'up')} disabled={idx === 0} className="p-0.5 hover:bg-hover rounded disabled:opacity-30" title="上移"><ArrowUp className="w-3 h-3" /></button>
+                          <button onClick={() => moveColumn(col.id, 'down')} disabled={idx === columns.length - 1} className="p-0.5 hover:bg-hover rounded disabled:opacity-30" title="下移"><ArrowDown className="w-3 h-3" /></button>
                         </div>
                       </td>
                       <td><input type="text" value={col.name} onChange={e => updateColumn(col.id, { name: e.target.value })} className="w-full bg-transparent border-0 p-0 focus:ring-0" placeholder="列名" /></td>
@@ -297,12 +297,12 @@ function TableCreateEditor() {
                         </select>
                       </td>
                       <td><input type="number" value={col.length || ''} onChange={e => updateColumn(col.id, { length: parseInt(e.target.value) || undefined })} className="w-full bg-transparent border-0 p-0 text-center" placeholder="-" /></td>
-                      <td className="text-center"><button onClick={() => updateColumn(col.id, { isPrimaryKey: !col.isPrimaryKey })} className={`p-1 rounded ${col.isPrimaryKey ? 'text-accent' : 'text-text-muted'}`}><Key className="w-3.5 h-3.5" /></button></td>
-                      <td className="text-center"><button onClick={() => updateColumn(col.id, { isAutoIncrement: !col.isAutoIncrement })} className={`p-1 rounded ${col.isAutoIncrement ? 'text-accent2' : 'text-text-muted'}`} disabled={!col.isPrimaryKey}><Hash className="w-3.5 h-3.5" /></button></td>
-                      <td className="text-center"><button onClick={() => updateColumn(col.id, { nullable: !col.nullable })} className={`p-1 rounded ${!col.nullable ? 'text-warning' : 'text-text-muted'}`}><Lock className="w-3.5 h-3.5" /></button></td>
-                      <td className="text-center"><button onClick={() => updateColumn(col.id, { isUnique: !col.isUnique })} className={`p-1 rounded ${col.isUnique ? 'text-success' : 'text-text-muted'}`}><ToggleLeft className="w-3.5 h-3.5" /></button></td>
+                      <td className="text-center"><button onClick={() => updateColumn(col.id, { isPrimaryKey: !col.isPrimaryKey })} className={`p-1 rounded ${col.isPrimaryKey ? 'text-accent' : 'text-text-muted'}`} title="主键"><Key className="w-3.5 h-3.5" /></button></td>
+                      <td className="text-center"><button onClick={() => updateColumn(col.id, { isAutoIncrement: !col.isAutoIncrement })} className={`p-1 rounded ${col.isAutoIncrement ? 'text-accent2' : 'text-text-muted'}`} disabled={!col.isPrimaryKey} title="自增"><Hash className="w-3.5 h-3.5" /></button></td>
+                      <td className="text-center"><button onClick={() => updateColumn(col.id, { nullable: !col.nullable })} className={`p-1 rounded ${!col.nullable ? 'text-warning' : 'text-text-muted'}`} title="非空"><Lock className="w-3.5 h-3.5" /></button></td>
+                      <td className="text-center"><button onClick={() => updateColumn(col.id, { isUnique: !col.isUnique })} className={`p-1 rounded ${col.isUnique ? 'text-success' : 'text-text-muted'}`} title="唯一"><ToggleLeft className="w-3.5 h-3.5" /></button></td>
                       <td><input type="text" value={col.defaultValue || ''} onChange={e => updateColumn(col.id, { defaultValue: e.target.value })} className="w-full bg-transparent border-0 p-0" placeholder="NULL" /></td>
-                      <td className="text-center"><button onClick={() => removeColumn(col.id)} className="p-1.5 hover:bg-hover rounded text-error"><Trash2 className="w-3.5 h-3.5" /></button></td>
+                      <td className="text-center"><button onClick={() => removeColumn(col.id)} className="p-1.5 hover:bg-hover rounded text-error" title="删除"><Trash2 className="w-3.5 h-3.5" /></button></td>
                     </tr>
                   ))}
                 </tbody>

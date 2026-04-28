@@ -541,8 +541,15 @@ export default function SqlEditorPage() {
                       className="flex items-center gap-2 p-2 rounded hover:bg-hover group"
                     >
                       <button
+                        onClick={() => removeSqlHistory(item.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-hover rounded flex-shrink-0 order-first"
+                        title="删除此记录"
+                      >
+                        <Trash2 className="w-4 h-4 text-error" />
+                      </button>
+                      <button
                         onClick={() => loadQuery(item.sql)}
-                        className="flex-1 text-left"
+                        className="flex-1 text-left min-w-0"
                       >
                         <div className="flex items-start gap-2">
                           {item.success ? (
@@ -557,13 +564,6 @@ export default function SqlEditorPage() {
                             </p>
                           </div>
                         </div>
-                      </button>
-                      <button
-                        onClick={() => removeSqlHistory(item.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-hover rounded flex-shrink-0"
-                        title="删除此记录"
-                      >
-                        <Trash2 className="w-3 h-3 text-error" />
                       </button>
                     </div>
                   ))
@@ -580,17 +580,17 @@ export default function SqlEditorPage() {
                       className="flex items-center gap-2 p-2 rounded hover:bg-hover group"
                     >
                       <button
-                        onClick={() => loadQuery(item.sql)}
-                        className="flex-1 text-left"
-                      >
-                        <p className="text-xs text-text-dim truncate">{item.name}</p>
-                      </button>
-                      <button
                         onClick={() => removeSavedQuery(item.name)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-hover rounded flex-shrink-0"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-hover rounded flex-shrink-0 order-first"
                         title="删除此查询"
                       >
-                        <Trash2 className="w-3 h-3 text-error" />
+                        <Trash2 className="w-4 h-4 text-error" />
+                      </button>
+                      <button
+                        onClick={() => loadQuery(item.sql)}
+                        className="flex-1 text-left min-w-0"
+                      >
+                        <p className="text-xs text-text-dim truncate">{item.name}</p>
                       </button>
                     </div>
                   ))

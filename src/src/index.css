@@ -40,30 +40,30 @@
    拟态化设计 - 浅色主题
    =========================== */
 .light {
-  --bg: #e8e8ec;
-  --sidebar: #dcdce0;
-  --panel: #e4e4e8;
-  --border: #c8c8cc;
+  --bg: #ebedf0;
+  --sidebar: #e1e4e8;
+  --panel: #f2f4f6;
+  --border: #d1d5da;
   --accent: #6366f1;
   --accent2: #0891b2;
-  --text: #2d2d3a;
-  --text-muted: #6b7280;
-  --text-dim: #4b5563;
+  --text: #1f1f2e;
+  --text-muted: #7a818c;
+  --text-dim: #5a616e;
   --success: #22c55e;
   --error: #ef4444;
   --warning: #f59e0b;
   --info: #3b82f6;
   --orange: #f97316;
-  --hover: #d8d8dc;
-  --selected: #d0d0d5;
-  --input-bg: #e0e0e4;
-  --header-bg: #d5d5d9;
-  --toolbar-bg: #dcdce0;
+  --hover: #d5d8dd;
+  --selected: #c8cdd3;
+  --input-bg: #f8f9fa;
+  --header-bg: #e1e4e8;
+  --toolbar-bg: #e1e4e8;
   --tooltip-bg: #ffffff;
-  
+
   /* 拟态化阴影 - 浅色（优化后的柔和阴影） */
-  --shadow-light: rgba(255, 255, 255, 0.8);
-  --shadow-dark: rgba(160, 160, 180, 0.35);
+  --shadow-light: rgba(255, 255, 255, 0.7);
+  --shadow-dark: rgba(160, 165, 175, 0.35);
   --neu-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
   --neu-shadow-inset: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
   --neu-shadow-sm: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);

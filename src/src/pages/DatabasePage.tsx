@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import {
   Database, Table, Search, RefreshCw, Plus, Trash2, Copy, Check,
   ChevronRight, ChevronDown, FileSpreadsheet, Download, Loader2, AlertCircle,
-  WifiOff, Server, X, FolderOpen, Filter, FolderTree, Eye, Trash, PlusCircle
+  WifiOff, Server, X, FolderOpen, Filter, FolderTree, Eye, Trash, PlusCircle, Code
 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { Splitter } from '../components/ResizablePanel'
@@ -92,6 +92,14 @@ export default function DatabasePage({ onNavigateToDesigner }: { onNavigateToDes
     tableName: string | null
     type: 'table' | 'tablesHeader' | null
   }>({ isOpen: false, x: 0, y: 0, tableName: null, type: null })
+
+  // 数据行右键菜单状态
+  const [rowContextMenu, setRowContextMenu] = useState<{
+    isOpen: boolean
+    x: number
+    y: number
+    row: any | null
+  }>({ isOpen: false, x: 0, y: 0, row: null })
 
   // 表结构弹窗状态（已移至可视化设计器标签页）
 
@@ -357,6 +365,33 @@ export default function DatabasePage({ onNavigateToDesigner }: { onNavigateToDes
     }
     addDesignerTab(tab)
     onNavigateToDesigner()
+  }
+
+  // 行右键菜单处理
+  const handleRowContextMenu = (e: React.MouseEvent, row: any) => {
+    e.preventDefault()
+    setRowContextMenu({
+      isOpen: true,
+      x: e.clientX,
+      y: e.clientY,
+      row,
+    })
+  }
+
+  // 将一行数据复制为 SQL INSERT 语句
+  const copyRowAsSqlInsert = (row: any) => {
+    if (!activeTab || !tableData) return
+    
+    const columns = Object.keys(row)
+      .filter(col => row[col] !== undefined)
+    const values = columns.map(col => formatValueForSQL(row[col]))
+    
+    const sql = `INSERT INTO "${activeTab.tableName}" ("${columns.join('", "')}") VALUES (${values.join(', ')});`
+    
+    navigator.clipboard.writeText(sql)
+      .catch(() => alert('复制失败'))
+    
+    setRowContextMenu(prev => ({ ...prev, isOpen: false }))
   }
 
   // 删除表
@@ -1366,6 +1401,7 @@ export default function DatabasePage({ onNavigateToDesigner }: { onNavigateToDes
                   <tr
                     key={rowKey}
                     className={`group transition-all ${selectedRows.has(rowKey) ? 'bg-selected/50' : ''}`}
+                    onContextMenu={(e) => handleRowContextMenu(e, row)}
                   >
                     <td className="text-center min-w-[32px]">
                       <input
@@ -1763,7 +1799,7 @@ export default function DatabasePage({ onNavigateToDesigner }: { onNavigateToDes
       onClose={() => setShowFileBrowser(false)}
     />
 
-    {/* 右键菜单 */}
+    {/* 表列表右键菜单 */}
     <ContextMenu
       isOpen={contextMenu.isOpen}
       x={contextMenu.x}
@@ -1791,6 +1827,25 @@ export default function DatabasePage({ onNavigateToDesigner }: { onNavigateToDes
                 danger: true,
               },
             ]
+      }
+    />
+
+    {/* 数据行右键菜单 */}
+    <ContextMenu
+      isOpen={rowContextMenu.isOpen}
+      x={rowContextMenu.x}
+      y={rowContextMenu.y}
+      onClose={() => setRowContextMenu({ ...rowContextMenu, isOpen: false })}
+      items={
+        rowContextMenu.row
+          ? [
+              {
+                label: '复制为 INSERT 语句',
+                icon: <Code className="w-4 h-4" />,
+                onClick: () => rowContextMenu.row && copyRowAsSqlInsert(rowContextMenu.row),
+              },
+            ]
+          : []
       }
     />
 

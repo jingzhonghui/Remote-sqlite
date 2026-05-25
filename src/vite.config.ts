@@ -1,14 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-import electron from 'vite-plugin-electron'
+import electron from 'vite-plugin-electron/simple'
 
 export default defineConfig({
   plugins: [
     react(),
-    electron([
-      {
-        // Main process
+    electron({
+      main: {
         entry: 'electron/main.ts',
         onstart: (options) => {
           options.startup()
@@ -21,28 +20,17 @@ export default defineConfig({
           },
         },
       },
-      {
-        // Preload script
-        entry: 'electron/preload.ts',
-        onstart: (options) => {
-          options.reload()
-        },
+      preload: {
+        input: 'electron/preload.ts',
         vite: {
           build: {
-            lib: {
-              entry: 'electron/preload.ts',
-              formats: ['cjs'],
-              fileName: () => 'preload.cjs',
-            },
             rollupOptions: {
-              output: {
-                dir: 'dist-electron',
-              },
+              external: ['ssh2', 'cpu-features', 'nan'],
             },
           },
         },
       },
-    ]),
+    }),
   ],
   resolve: {
     alias: {

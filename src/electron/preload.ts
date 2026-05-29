@@ -81,6 +81,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSession: (sessionId: string) => ipcRenderer.invoke('ai:get-session', sessionId),
     deleteSession: (sessionId: string) => ipcRenderer.invoke('ai:delete-session', sessionId),
     clearSessions: () => ipcRenderer.invoke('ai:clear-sessions'),
+
+    // 弹出窗口
+    openPopoutWindow: () => ipcRenderer.invoke('ai:open-popout'),
+    closePopoutWindow: () => ipcRenderer.invoke('ai:close-popout'),
+    onPopoutClosed: (callback: () => void) => {
+      ipcRenderer.on('ai:popout-closed', callback)
+      return () => ipcRenderer.removeListener('ai:popout-closed', callback)
+    },
   },
 })
 
@@ -145,6 +153,9 @@ declare global {
         getSession: (sessionId: string) => Promise<{ success: boolean; session?: ChatSession | null; message?: string }>
         deleteSession: (sessionId: string) => Promise<{ success: boolean; message?: string }>
         clearSessions: () => Promise<{ success: boolean; message?: string }>
+        openPopoutWindow: () => Promise<{ success: boolean }>
+        closePopoutWindow: () => Promise<{ success: boolean }>
+        onPopoutClosed: (callback: () => void) => () => void
       }
     }
   }

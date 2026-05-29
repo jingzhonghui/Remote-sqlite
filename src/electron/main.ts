@@ -16,6 +16,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 let mainWindow: BrowserWindow | null = null
+let popoutWindow: BrowserWindow | null = null
 const sshService = new SSHService()
 const sqliteService = new SQLiteService(sshService)
 
@@ -98,6 +99,53 @@ function setupIPC() {
 
   // AI 助手 IPC
   registerAIIPC()
+
+  // AI 弹出窗口
+  ipcMain.handle('ai:open-popout', async () => {
+    if (popoutWindow && !popoutWindow.isDestroyed()) {
+      popoutWindow.focus()
+      return { success: true }
+    }
+
+    const url = process.env.VITE_DEV_SERVER_URL
+      ? process.env.VITE_DEV_SERVER_URL + '#/popout/ai'
+      : `file://${path.join(__dirname, '../dist/index.html').replace(/\\/g, '/')}#/popout/ai`
+
+    popoutWindow = new BrowserWindow({
+      width: 520,
+      height: 700,
+      minWidth: 380,
+      minHeight: 500,
+      title: 'AI 助手',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.mjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+      show: false,
+    })
+
+    popoutWindow.loadURL(url)
+
+    popoutWindow.once('ready-to-show', () => {
+      popoutWindow?.show()
+    })
+
+    popoutWindow.on('closed', () => {
+      popoutWindow = null
+      // 通知主窗口 AI 面板已还原
+      mainWindow?.webContents.send('ai:popout-closed')
+    })
+
+    return { success: true }
+  })
+
+  ipcMain.handle('ai:close-popout', async () => {
+    if (popoutWindow && !popoutWindow.isDestroyed()) {
+      popoutWindow.close()
+    }
+    return { success: true }
+  })
 }
 
 // 移除默认菜单栏

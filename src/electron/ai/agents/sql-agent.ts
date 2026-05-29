@@ -6,7 +6,7 @@
 
 import { ChatOpenAI } from '@langchain/openai'
 import { createAgent } from 'langchain'
-import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import type { BaseMessage } from '@langchain/core/messages'
 import type { SQLiteService } from '../../services/sqliteService'
 import type { SSHService } from '../../services/sshService'
@@ -51,7 +51,6 @@ export class SQLAgent {
    * 创建 LLM 模型
    */
   private createModel() {
-    console.log('[AI Debug] Creating model with apiKey:', this.config.apiKey ? '***' : 'EMPTY')
     return new ChatOpenAI({
       modelName: this.config.model,
       temperature: this.config.temperature,
@@ -85,10 +84,8 @@ export class SQLAgent {
     dbContext: DatabaseContext,
     sessionId?: string
   ): AsyncGenerator<StreamEvent, void, unknown> {
-    console.log('[AI Debug] chatStream called with input:', input.substring(0, 50))
 
     if (!this.config.enabled || !this.config.apiKey) {
-      console.log('[AI Debug] AI not enabled or no API key')
       yield {
         type: 'error',
         message: 'AI 助手未启用或未配置 API Key'
@@ -100,7 +97,6 @@ export class SQLAgent {
       // 获取或创建会话
       const session = this.getOrCreateSession(sessionId, dbContext)
       this.currentSessionId = session.id
-      console.log('[AI Debug] Session:', session.id)
 
       // 先发送一个 token 表示开始处理
       yield { type: 'token', content: '' }
@@ -118,33 +114,62 @@ export class SQLAgent {
         }),
         new HumanMessage(input)
       ]
-      console.log('[AI Debug] Messages prepared:', messages.length)
 
       // 创建模型
       const model = this.createModel()
-      console.log('[AI Debug] Model created')
 
-      // 直接调用模型（简化测试）
-      console.log('[AI Debug] Invoking model...')
-      let content = ''
-      try {
-        const response = await model.invoke(messages)
-        console.log('[AI Debug] Model response type:', typeof response)
-        console.log('[AI Debug] Model response keys:', Object.keys(response || {}))
+      // 绑定工具以实现函数调用
+      const toolContext = this.createToolContext(dbContext)
+      const tools = createAllTools(toolContext)
+      const modelWithTools = model.bindTools(tools)
+      // 第一轮：模型决定是否调用工具
+      let response = await modelWithTools.invoke(messages)
+      messages.push(response)
 
-        if (response && typeof response.content === 'string') {
-          content = response.content
-        } else if (response && Array.isArray(response.content)) {
-          content = response.content.map((c: any) => typeof c === 'string' ? c : c.text || '').join('')
-        } else if (response && response.text) {
-          content = response.text
-        } else {
-          content = JSON.stringify(response)
+      // 处理工具调用（最多 3 轮）
+      let rounds = 0
+      while (response.tool_calls && response.tool_calls.length > 0 && rounds < 3) {
+        rounds++
+
+        for (const toolCall of response.tool_calls) {
+          yield { type: 'tool_start', tool: toolCall.name ?? 'unknown' }
+
+          try {
+            const langchainTool = tools.find(t => t.name === toolCall.name)
+            if (!langchainTool) {
+              throw new Error('Unknown tool: ' + toolCall.name)
+            }
+
+            const result = await langchainTool.invoke(toolCall.args)
+
+            if (toolCall.name === 'execute_query' && result?.success) {
+              yield { type: 'sql_result', result }
+            } else if (toolCall.name === 'get_database_schema' && result?.success) {
+              yield { type: 'sql_result', result: { schema: result.schema } }
+            }
+
+            messages.push(new ToolMessage(JSON.stringify(result), toolCall.id ?? ''))
+
+            yield { type: 'tool_end', tool: toolCall.name, result }
+          } catch (err: any) {
+            const errMsg = err instanceof Error ? err.message : 'Tool execution failed'
+            messages.push(new ToolMessage(JSON.stringify({ error: errMsg }), toolCall.id ?? ''))
+            yield { type: 'tool_end', tool: toolCall.name ?? 'unknown', result: { error: errMsg } }
+          }
         }
-        console.log('[AI Debug] Content extracted:', content.substring(0, 100))
-      } catch (invokeError) {
-        console.error('[AI Debug] Model invoke error:', invokeError)
-        throw invokeError
+
+        response = await modelWithTools.invoke(messages)
+        messages.push(response)
+      }
+
+      // Extract final text content
+      let content = ''
+      if (typeof response.content === 'string') {
+        content = response.content
+      } else if (Array.isArray(response.content)) {
+        content = response.content.map((c: any) => typeof c === 'string' ? c : c.text || '').join('')
+      } else if ((response as any).text) {
+        content = (response as any).text
       }
 
       // 流式输出响应
@@ -159,7 +184,6 @@ export class SQLAgent {
 
       // 发送完成事件
       yield { type: 'complete', summary: '对话完成' }
-      console.log('[AI Debug] Stream complete')
 
       // 更新会话历史
       session.messages.push(
@@ -169,7 +193,6 @@ export class SQLAgent {
       session.updatedAt = Date.now()
 
     } catch (error) {
-      console.error('[AI Debug] Agent 执行错误:', error)
       yield {
         type: 'error',
         message: error instanceof Error ? error.message : 'AI 执行失败',

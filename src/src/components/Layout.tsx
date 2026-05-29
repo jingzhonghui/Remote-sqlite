@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Database, Link2, FileCode, Table2, Settings, Bot, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Database, Link2, FileCode, Table2, Settings, Bot } from 'lucide-react'
 import SettingsPanel from './SettingsPanel'
 import AIAssistantPanel from './AIAssistantPanel'
 import { useAIStore } from '../stores/useAIStore'
+import { useAppStore } from '../stores/useAppStore'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -25,6 +26,7 @@ const MAX_AI_WIDTH = 800
 export default function Layout({ children, currentTab, onTabChange }: LayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { isPanelOpen, setPanelOpen } = useAIStore()
+  const aiEnabled = useAppStore((state) => state.aiConfig.enabled)
   const [aiWidth, setAiWidth] = useState(DEFAULT_AI_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<HTMLDivElement>(null)
@@ -94,25 +96,18 @@ export default function Layout({ children, currentTab, onTabChange }: LayoutProp
           <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
             {/* AI 助手按钮 - 放在设置按钮上方 */}
             <button
-              onClick={() => setPanelOpen(!isPanelOpen)}
+              onClick={() => aiEnabled && setPanelOpen(!isPanelOpen)}
+              disabled={!aiEnabled}
               className={`w-full flex flex-col items-center justify-center py-3 rounded-xl transition-all duration-200 ${
-                isPanelOpen
-                  ? 'neu-inset text-accent' 
-                  : 'round-btn text-text-muted hover:text-accent'
+                !aiEnabled
+                  ? 'opacity-40 cursor-not-allowed'
+                  : isPanelOpen
+                    ? 'bg-accent/15 text-accent cursor-pointer'
+                    : 'text-text-muted hover:bg-hover hover:text-accent cursor-pointer'
               }`}
-              title={isPanelOpen ? '收起 AI 助手' : '展开 AI 助手'}
+              title={!aiEnabled ? '请先在设置中启用 AI 助手' : isPanelOpen ? '收起 AI 助手' : '展开 AI 助手'}
             >
-              <div className="relative">
-                <Bot className="w-5 h-5" />
-                {/* 展开/折叠指示器 */}
-                <div className="absolute -right-2 -top-1 w-3 h-3 rounded-full bg-accent flex items-center justify-center">
-                  {isPanelOpen ? (
-                    <ChevronRight className="w-2 h-2 text-white" />
-                  ) : (
-                    <ChevronLeft className="w-2 h-2 text-white" />
-                  )}
-                </div>
-              </div>
+              <Bot className="w-5 h-5" />
               <span className="text-[10px] mt-1.5 font-medium">
                 {isPanelOpen ? '收起' : 'AI助手'}
               </span>

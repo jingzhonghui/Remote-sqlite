@@ -1,23 +1,27 @@
 /**
  * 聊天消息组件
- * 
+ *
  * 渲染不同类型的消息：文本、SQL、结果、分析、错误
  */
 
 import { useState } from 'react'
-import { 
-  User, 
-  Bot, 
-  Copy, 
-  Check, 
-  Play, 
-  FileEdit, 
+import {
+  User,
+  Bot,
+  Copy,
+  Check,
+  Play,
+  FileEdit,
   AlertCircle,
   Terminal,
   BarChart3,
   Table2
 } from 'lucide-react'
 import type { ChatMessage } from '../../types/ai'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
+import 'highlight.js/styles/atom-one-dark.css'
 
 interface StreamState {
   status: 'idle' | 'streaming' | 'tool_calling' | 'error'
@@ -41,9 +45,9 @@ export function ChatMessage({ message, isLast, streamState }: ChatMessageProps) 
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
       {/* 头像 */}
       <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${
-        isUser 
-          ? 'bg-accent text-white' 
-          : 'bg-panel neu-btn text-text-muted'
+        isUser
+          ? 'bg-accent text-white'
+          : 'bg-accent/10 text-accent'
       }`}>
         {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
       </div>
@@ -97,28 +101,150 @@ export function ChatMessage({ message, isLast, streamState }: ChatMessageProps) 
 }
 
 /**
- * 文本消息
+ * 文本消息（支持 Markdown 渲染）
  */
-function TextMessage({ 
-  content, 
-  isStreaming, 
-  streamText 
-}: { 
+function TextMessage({
+  content,
+  isStreaming,
+  streamText
+}: {
   content: string
   isStreaming?: boolean
   streamText?: string
 }) {
   const displayText = isStreaming ? streamText || content : content
-  
+
   return (
-    <div className="text-sm text-text whitespace-pre-wrap">
-      {displayText}
+    <div className="text-sm text-text markdown-body">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{
+          code({ className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '')
+            const isInline = !match
+            const codeStr = String(children).replace(/\n$/, '')
+
+            if (isInline) {
+              return (
+                <code className="px-1.5 py-0.5 rounded bg-code text-accent text-xs font-mono" {...props}>
+                  {children}
+                </code>
+              )
+            }
+
+            return (
+              <CodeBlock
+                code={codeStr}
+                language={match ? match[1] : ''}
+              />
+            )
+          },
+          pre({ children }) {
+            return <>{children}</>
+          },
+          p({ children }) {
+            return <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+          },
+          ul({ children }) {
+            return <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>
+          },
+          ol({ children }) {
+            return <ol className="list-decimal pl-5 mb-2 space-y-1">{children}</ol>
+          },
+          li({ children }) {
+            return <li className="leading-relaxed">{children}</li>
+          },
+          h1({ children }) {
+            return <h1 className="text-lg font-bold mb-2 mt-3 text-text">{children}</h1>
+          },
+          h2({ children }) {
+            return <h2 className="text-base font-bold mb-2 mt-3 text-text">{children}</h2>
+          },
+          h3({ children }) {
+            return <h3 className="text-sm font-bold mb-1 mt-2 text-text">{children}</h3>
+          },
+          strong({ children }) {
+            return <strong className="font-semibold text-text">{children}</strong>
+          },
+          table({ children }) {
+            return (
+              <div className="overflow-x-auto mb-2 rounded-xl border border-border">
+                <table className="w-full text-sm">{children}</table>
+              </div>
+            )
+          },
+          thead({ children }) {
+            return <thead className="bg-panel">{children}</thead>
+          },
+          th({ children }) {
+            return <th className="px-3 py-2 text-left text-xs font-medium text-text-dim border-b border-border">{children}</th>
+          },
+          td({ children }) {
+            return <td className="px-3 py-2 text-text text-xs border-b border-border">{children}</td>
+          },
+          blockquote({ children }) {
+            return (
+              <blockquote className="border-l-2 border-accent pl-3 py-1 mb-2 text-text-muted italic">
+                {children}
+              </blockquote>
+            )
+          },
+          hr() {
+            return <hr className="my-3 border-border" />
+          },
+        }}
+      >
+        {displayText}
+      </ReactMarkdown>
       {isStreaming && (
         <span className="inline-block w-2 h-4 bg-accent ml-1 animate-pulse" />
       )}
     </div>
   )
 }
+
+/**
+ * 代码块组件
+ */
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const isSQL = language === 'sql' || language === ''
+
+  return (
+    <div className="my-2 rounded-xl overflow-hidden border border-border">
+      <div className="flex items-center justify-between px-3 py-2 bg-code">
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4 text-text-muted" />
+          <span className="text-xs text-text-muted">{language || 'code'}</span>
+          {isSQL && (
+            <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 text-xs">
+              SQL
+            </span>
+          )}
+        </div>
+        <button
+          onClick={handleCopy}
+          className="p-1 rounded hover:bg-hover text-text-muted hover:text-text transition-colors"
+          title="复制"
+        >
+          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+        </button>
+      </div>
+      <pre className="p-3 overflow-x-auto bg-code/50">
+        <code className="text-sm text-text font-mono whitespace-pre">{code}</code>
+      </pre>
+    </div>
+  )
+}
+
 
 /**
  * SQL 消息（带代码块和操作按钮）

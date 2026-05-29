@@ -4,6 +4,7 @@ import ConnectionPage from './pages/ConnectionPage'
 import DatabasePage from './pages/DatabasePage'
 import SqlEditorPage from './pages/SqlEditorPage'
 import TableDesignerPage from './pages/TableDesignerPage'
+import AIAssistantPanel from './components/AIAssistantPanel'
 import { useAppStore } from './stores/useAppStore'
 import { DEFAULT_AI_CONFIG } from './types/ai'
 
@@ -11,9 +12,18 @@ type Tab = 'connection' | 'database' | 'sql' | 'designer'
 
 function App() {
   const [currentTab, setCurrentTab] = useState<Tab>('connection')
+  const [popoutMode, setPopoutMode] = useState(false)
   const theme = useAppStore((state) => state.theme)
   const fontSize = useAppStore((state) => state.fontSize)
   const initAIConfig = useAppStore((state) => state.initAIConfig)
+
+  // 检测弹出窗口模式
+  useEffect(() => {
+    if (window.location.hash.includes('popout/ai')) {
+      setPopoutMode(true)
+      document.title = 'AI 助手'
+    }
+  }, [])
 
   // 应用主题到 HTML 元素
   useEffect(() => {
@@ -46,7 +56,13 @@ function App() {
     loadAIConfig()
   }, [initAIConfig])
 
-  return (
+  return popoutMode ? (
+    <div className="h-screen bg-bg text-text" style={{ fontSize: `${fontSize}px` }}>
+      <div className="h-full">
+        <AIAssistantPanel isOpen={true} onClose={() => {}} />
+      </div>
+    </div>
+  ) : (
     <Layout currentTab={currentTab} onTabChange={setCurrentTab}>
       <div className="h-full w-full" style={{ display: currentTab === 'connection' ? 'block' : 'none' }}>
         <ConnectionPage />

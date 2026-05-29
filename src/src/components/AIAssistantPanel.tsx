@@ -5,17 +5,19 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { 
-  Bot, 
-  Send, 
-  Loader2, 
+import {
+  Bot,
+  Send,
+  Loader2,
   Sparkles,
   Database,
   MessageSquare,
   Trash2,
   Plus,
   AlertCircle,
-  PanelRightClose
+  PanelRightClose,
+  PanelTopClose,
+  PanelRightOpen
 } from 'lucide-react'
 import { useAIStore } from '../stores/useAIStore'
 import { useAppStore } from '../stores/useAppStore'
@@ -31,8 +33,37 @@ interface AIAssistantPanelProps {
 export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssistantPanelProps) {
   const [input, setInput] = useState('')
   const [showSessions, setShowSessions] = useState(false)
+  const [isPopout, setIsPopout] = useState(
+    typeof window !== 'undefined' && window.location.hash.includes('popout/ai')
+  )
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // 监听弹出窗口关闭事件（主窗口模式）
+  useEffect(() => {
+    const cleanup = (window as any).electronAPI?.ai?.onPopoutClosed?.(() => {
+      setIsPopout(false)
+      useAIStore.getState().setPanelOpen(true)
+    })
+    return () => cleanup?.()
+  }, [])
+
+  // 处理弹出/还原
+  const handlePopout = async () => {
+    if (isPopout) {
+      // 还原：关闭弹出窗口并在主窗口展开面板
+      await (window as any).electronAPI?.ai?.closePopoutWindow()
+      setIsPopout(false)
+      useAIStore.getState().setPanelOpen(true)
+    } else {
+      // 弹出：打开独立窗口
+      const result = await (window as any).electronAPI?.ai?.openPopoutWindow()
+      if (result?.success) {
+        setIsPopout(true)
+        onClose()
+      }
+    }
+  }
   
   const {
     sessions,
@@ -89,20 +120,23 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
     
     const userContent = input.trim()
     setInput('')
-    
-    // 添加用户消息
-    addUserMessage(userContent)
-    
-    // 创建 AI 消息占位
-    const aiMessageId = addAIMessage('')
-    
-    // 确保有会话
+
+    // 确保有会话（必须在添加消息之前创建，否则 createSession 会重置消息列表）
     let sessionId = currentSessionId
     if (!sessionId) {
       sessionId = createSession(context)
     }
+
+    // 添加用户消息
+    addUserMessage(userContent)
+
+    // 创建 AI 消息占位
+    const aiMessageId = addAIMessage('')
     
     try {
+      // 清理上一次流的 IPC 监听器，避免重复注册导致每个 chunk 被多次处理
+      useAIStore.getState().abortStream?.()
+
       // 开始流式接收
       const aiAPI = (window as any).electronAPI?.ai
       if (!aiAPI) {
@@ -210,15 +244,34 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
           >
             <MessageSquare className="w-5 h-5" />
           </button>
-          
-          {/* 折叠按钮 */}
+
+          {/* 弹出/还原窗口按钮 */}
           <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-hover text-text-muted hover:text-text transition-colors"
-            title="折叠侧边栏"
+            onClick={handlePopout}
+            className={`p-2 rounded-lg transition-colors ${
+              isPopout
+                ? 'bg-accent/10 text-accent hover:bg-accent/20'
+                : 'hover:bg-hover text-text-muted hover:text-text'
+            }`}
+            title={isPopout ? '还原到侧边栏' : '弹出独立窗口'}
           >
-            <PanelRightClose className="w-5 h-5" />
+            {isPopout ? (
+              <PanelRightOpen className="w-5 h-5" />
+            ) : (
+              <PanelTopClose className="w-5 h-5" />
+            )}
           </button>
+
+          {/* 折叠按钮（弹出窗口时隐藏） */}
+          {!isPopout && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-hover text-text-muted hover:text-text transition-colors"
+              title="折叠侧边栏"
+            >
+              <PanelRightClose className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 

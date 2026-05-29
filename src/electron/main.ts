@@ -1,9 +1,15 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import crypto from 'crypto'
 import { SSHService } from './services/sshService'
 import { SQLiteService } from './services/sqliteService'
 import { initializeAI, registerAIIPC } from './ai'
+
+// 为 LangChain 提供全局 crypto 对象
+if (typeof globalThis.crypto === 'undefined') {
+  (globalThis as any).crypto = crypto
+}
 
 // ESM 中 __dirname 不可用，需要手动创建
 const __filename = fileURLToPath(import.meta.url)

@@ -15,7 +15,7 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['ssh2', 'cpu-features', 'nan'],
+              external: ['ssh2', 'cpu-features', 'nan', 'crypto', 'fs', 'path', 'os', 'http', 'https', 'net', 'tls', 'stream', 'util', 'events', 'buffer', 'url', 'querystring', 'zlib', 'child_process'],
             },
           },
         },
@@ -25,7 +25,7 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['ssh2', 'cpu-features', 'nan'],
+              external: ['ssh2', 'cpu-features', 'nan', 'crypto'],
             },
           },
         },

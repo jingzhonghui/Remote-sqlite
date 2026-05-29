@@ -52,10 +52,10 @@ export class SQLAgent {
    */
   private createModel() {
     return new ChatOpenAI({
-      modelName: this.config.model,
+      model: this.config.model,
       temperature: this.config.temperature,
       maxTokens: this.config.maxTokens,
-      openAIApiKey: this.config.apiKey,
+      apiKey: this.config.apiKey,
       configuration: this.config.baseUrl ? {
         baseURL: this.config.baseUrl,
       } : undefined,

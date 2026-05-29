@@ -5,6 +5,7 @@ import DatabasePage from './pages/DatabasePage'
 import SqlEditorPage from './pages/SqlEditorPage'
 import TableDesignerPage from './pages/TableDesignerPage'
 import { useAppStore } from './stores/useAppStore'
+import { DEFAULT_AI_CONFIG } from './types/ai'
 
 type Tab = 'connection' | 'database' | 'sql' | 'designer'
 
@@ -12,6 +13,7 @@ function App() {
   const [currentTab, setCurrentTab] = useState<Tab>('connection')
   const theme = useAppStore((state) => state.theme)
   const fontSize = useAppStore((state) => state.fontSize)
+  const initAIConfig = useAppStore((state) => state.initAIConfig)
 
   // 应用主题到 HTML 元素
   useEffect(() => {
@@ -24,6 +26,25 @@ function App() {
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSize}px`
   }, [fontSize])
+
+  // 加载 AI 配置
+  useEffect(() => {
+    const loadAIConfig = async () => {
+      try {
+        const result = await (window as any).electronAPI?.ai?.getConfig()
+        if (result && result.apiKey !== undefined) {
+          // 合并默认配置和加载的配置（仅初始化，不触发保存）
+          initAIConfig({
+            ...DEFAULT_AI_CONFIG,
+            ...result,
+          })
+        }
+      } catch (err) {
+        console.log('加载 AI 配置失败:', err)
+      }
+    }
+    loadAIConfig()
+  }, [initAIConfig])
 
   return (
     <Layout currentTab={currentTab} onTabChange={setCurrentTab}>

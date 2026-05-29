@@ -81,6 +81,7 @@ interface AppState {
   // Actions - AI 配置
   setAIConfig: (config: Partial<AIConfig>) => void
   resetAIConfig: () => void
+  initAIConfig: (config: Partial<AIConfig>) => void  // 仅初始化，不保存到后端
   
   // Actions - AI 会话
   addAISession: (session: ChatSession) => void
@@ -349,14 +350,29 @@ export const useAppStore = create<AppState>()(
         })),
       
       // Actions - AI 配置
-      setAIConfig: (config) =>
+      setAIConfig: (config) => {
         set((state) => ({
           aiConfig: { ...state.aiConfig, ...config },
-        })),
+        }))
+        // 保存到后端（使用 setTimeout 避免在渲染时同步调用）
+        setTimeout(() => {
+          const currentConfig = get().aiConfig
+          if (typeof window !== 'undefined' && (window as any).electronAPI?.ai?.setConfig) {
+            (window as any).electronAPI.ai.setConfig(currentConfig).catch((err: any) => {
+              console.error('保存 AI 配置失败:', err)
+            })
+          }
+        }, 0)
+      },
       
       resetAIConfig: () =>
         set(() => ({
           aiConfig: DEFAULT_AI_CONFIG,
+        })),
+      
+      initAIConfig: (config) =>
+        set((state) => ({
+          aiConfig: { ...state.aiConfig, ...config },
         })),
       
       // Actions - AI 会话

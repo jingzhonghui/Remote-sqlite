@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { Database, Link2, FileCode, Table2, Settings } from 'lucide-react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { Database, Link2, FileCode, Table2, Settings, Bot, ChevronLeft, ChevronRight } from 'lucide-react'
 import SettingsPanel from './SettingsPanel'
+import AIAssistantPanel from './AIAssistantPanel'
+import { useAIStore } from '../stores/useAIStore'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -15,14 +17,53 @@ const navItems = [
   { key: 'designer', path: '/designer', icon: Table2, label: '可视化建表' },
 ]
 
+// 默认宽度和限制
+const DEFAULT_AI_WIDTH = 480
+const MIN_AI_WIDTH = 320
+const MAX_AI_WIDTH = 800
+
 export default function Layout({ children, currentTab, onTabChange }: LayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const { isPanelOpen, setPanelOpen } = useAIStore()
+  const [aiWidth, setAiWidth] = useState(DEFAULT_AI_WIDTH)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeRef = useRef<HTMLDivElement>(null)
+
+  // 处理拖动开始
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }, [])
+
+  // 处理拖动
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = window.innerWidth - e.clientX
+      if (newWidth >= MIN_AI_WIDTH && newWidth <= MAX_AI_WIDTH) {
+        setAiWidth(newWidth)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing])
 
   return (
     <>
-      <div className="flex h-screen bg-bg text-text">
-        {/* Sidebar */}
-        <aside className="w-16 flex flex-col py-4 px-2" style={{ backgroundColor: 'var(--sidebar)' }}>
+      <div className="flex h-screen bg-bg text-text overflow-hidden">
+        {/* Left Sidebar */}
+        <aside className="w-16 flex flex-col py-4 px-2 flex-shrink-0" style={{ backgroundColor: 'var(--sidebar)' }}>
           {/* Logo */}
           <div className="mb-4 flex items-center justify-center">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--panel)', boxShadow: 'var(--neu-shadow-sm)' }}>
@@ -49,8 +90,35 @@ export default function Layout({ children, currentTab, onTabChange }: LayoutProp
             ))}
           </nav>
 
-          {/* Settings */}
-          <div className="mt-auto pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+          {/* Bottom Actions */}
+          <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+            {/* AI 助手按钮 - 放在设置按钮上方 */}
+            <button
+              onClick={() => setPanelOpen(!isPanelOpen)}
+              className={`w-full flex flex-col items-center justify-center py-3 rounded-xl transition-all duration-200 ${
+                isPanelOpen
+                  ? 'neu-inset text-accent' 
+                  : 'round-btn text-text-muted hover:text-accent'
+              }`}
+              title={isPanelOpen ? '收起 AI 助手' : '展开 AI 助手'}
+            >
+              <div className="relative">
+                <Bot className="w-5 h-5" />
+                {/* 展开/折叠指示器 */}
+                <div className="absolute -right-2 -top-1 w-3 h-3 rounded-full bg-accent flex items-center justify-center">
+                  {isPanelOpen ? (
+                    <ChevronRight className="w-2 h-2 text-white" />
+                  ) : (
+                    <ChevronLeft className="w-2 h-2 text-white" />
+                  )}
+                </div>
+              </div>
+              <span className="text-[10px] mt-1.5 font-medium">
+                {isPanelOpen ? '收起' : 'AI助手'}
+              </span>
+            </button>
+            
+            {/* 设置按钮 */}
             <button 
               onClick={() => setSettingsOpen(true)}
               className="w-full flex flex-col items-center justify-center py-3 rounded-xl round-btn text-text-muted hover:text-text"
@@ -62,12 +130,40 @@ export default function Layout({ children, currentTab, onTabChange }: LayoutProp
           </div>
         </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-hidden p-1.5">
-          <div className="h-full neu-card p-1">
-            {children}
+        {/* Main Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Main Content */}
+          <main className={`flex-1 overflow-hidden p-1.5 transition-all duration-300`}>
+            <div className="h-full neu-card p-1">
+              {children}
+            </div>
+          </main>
+
+          {/* AI Assistant Sidebar - 右侧可折叠 */}
+          <div 
+            className={`flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden relative ${
+              isPanelOpen ? 'opacity-100' : 'w-0 opacity-0'
+            }`}
+            style={{ width: isPanelOpen ? aiWidth : 0 }}
+          >
+            <AIAssistantPanel isOpen={isPanelOpen} onClose={() => setPanelOpen(false)} />
+            
+            {/* 拖动调整宽度的手柄 */}
+            {isPanelOpen && (
+              <div
+                ref={resizeRef}
+                onMouseDown={handleResizeStart}
+                className={`absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 transition-colors ${
+                  isResizing ? 'bg-accent' : 'hover:bg-accent/50'
+                }`}
+                style={{
+                  backgroundColor: isResizing ? 'var(--accent)' : 'transparent',
+                }}
+                title="拖动调整宽度"
+              />
+            )}
           </div>
-        </main>
+        </div>
       </div>
 
       {/* Settings Panel */}

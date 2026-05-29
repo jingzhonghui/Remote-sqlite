@@ -51,8 +51,9 @@ export class SQLAgent {
    * 创建 LLM 模型
    */
   private createModel() {
+    console.log('[AI Debug] Creating model with apiKey:', this.config.apiKey ? '***' : 'EMPTY')
     return new ChatOpenAI({
-      model: this.config.model,
+      modelName: this.config.model,
       temperature: this.config.temperature,
       maxTokens: this.config.maxTokens,
       apiKey: this.config.apiKey,
@@ -84,7 +85,10 @@ export class SQLAgent {
     dbContext: DatabaseContext,
     sessionId?: string
   ): AsyncGenerator<StreamEvent, void, unknown> {
+    console.log('[AI Debug] chatStream called with input:', input.substring(0, 50))
+
     if (!this.config.enabled || !this.config.apiKey) {
+      console.log('[AI Debug] AI not enabled or no API key')
       yield {
         type: 'error',
         message: 'AI 助手未启用或未配置 API Key'
@@ -96,6 +100,10 @@ export class SQLAgent {
       // 获取或创建会话
       const session = this.getOrCreateSession(sessionId, dbContext)
       this.currentSessionId = session.id
+      console.log('[AI Debug] Session:', session.id)
+
+      // 先发送一个 token 表示开始处理
+      yield { type: 'token', content: '' }
 
       // 构建消息历史
       const messages: BaseMessage[] = [
@@ -110,126 +118,58 @@ export class SQLAgent {
         }),
         new HumanMessage(input)
       ]
+      console.log('[AI Debug] Messages prepared:', messages.length)
 
-      // 创建 Agent
-      const tools = createAllTools(this.createToolContext(dbContext))
-      const agent = createAgent({
-        model: this.createModel(),
-        tools,
-        systemPrompt: buildSystemPrompt(dbContext)
-      })
+      // 创建模型
+      const model = this.createModel()
+      console.log('[AI Debug] Model created')
 
-      // 流式执行
-      const stream = await agent.stream(
-        { messages },
-        { streamMode: ['messages', 'values'] }
-      )
+      // 直接调用模型（简化测试）
+      console.log('[AI Debug] Invoking model...')
+      let content = ''
+      try {
+        const response = await model.invoke(messages)
+        console.log('[AI Debug] Model response type:', typeof response)
+        console.log('[AI Debug] Model response keys:', Object.keys(response || {}))
 
-      let fullResponse = ''
-      let pendingToolCalls: string[] = []
-
-      for await (const chunk of stream) {
-        // 处理消息流
-        if (chunk.messages && chunk.messages.length > 0) {
-          const lastMessage = chunk.messages[chunk.messages.length - 1]
-          
-          // 检测 Tool 调用
-          if (lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
-            for (const toolCall of lastMessage.tool_calls) {
-              pendingToolCalls.push(toolCall.name)
-              yield {
-                type: 'tool_start',
-                tool: toolCall.name,
-                params: toolCall.args
-              }
-            }
-          }
-          
-          // 输出文本内容
-          if (lastMessage.content && typeof lastMessage.content === 'string') {
-            const content = lastMessage.content
-            fullResponse += content
-            yield {
-              type: 'token',
-              content
-            }
-          }
+        if (response && typeof response.content === 'string') {
+          content = response.content
+        } else if (response && Array.isArray(response.content)) {
+          content = response.content.map((c: any) => typeof c === 'string' ? c : c.text || '').join('')
+        } else if (response && response.text) {
+          content = response.text
+        } else {
+          content = JSON.stringify(response)
         }
-        
-        // 处理 Tool 结果
-        if (chunk.values && chunk.values.toolResults) {
-          for (const result of chunk.values.toolResults) {
-            const toolName = pendingToolCalls.shift() || 'unknown'
-            
-            // 特殊处理某些 Tool 结果
-            if (toolName === 'execute_query' && result.success) {
-              yield {
-                type: 'sql_result',
-                result: {
-                  success: true,
-                  columns: result.columns,
-                  rows: result.rows,
-                  rowCount: result.rowCount
-                }
-              }
-            } else if (toolName === 'execute_dml') {
-              if (result.requiresConfirmation) {
-                yield {
-                  type: 'confirmation_required',
-                  operation: {
-                    title: '确认执行操作',
-                    operation: result.sql,
-                    level: result.safety,
-                    impact: {
-                      affectedRows: result.affectedRows || 0,
-                      affectedTables: [],
-                      isDestructive: result.safety === 'dangerous'
-                    },
-                    preview: result.preview
-                  }
-                }
-              } else if (result.success) {
-                yield {
-                  type: 'sql_result',
-                  result: {
-                    success: true,
-                    columns: [],
-                    rows: [],
-                    rowCount: result.affectedRows || 0
-                  }
-                }
-              }
-            } else if (toolName === 'analyze_data' && result.success) {
-              yield {
-                type: 'analysis',
-                data: result.analysis
-              }
-            }
-            
-            yield {
-              type: 'tool_end',
-              tool: toolName,
-              result
-            }
-          }
+        console.log('[AI Debug] Content extracted:', content.substring(0, 100))
+      } catch (invokeError) {
+        console.error('[AI Debug] Model invoke error:', invokeError)
+        throw invokeError
+      }
+
+      // 流式输出响应
+      if (content) {
+        const chunks = content.split('')
+        for (const char of chunks) {
+          yield { type: 'token', content: char }
+          // 小延迟模拟流式效果
+          await new Promise(resolve => setTimeout(resolve, 10))
         }
       }
+
+      // 发送完成事件
+      yield { type: 'complete', summary: '对话完成' }
+      console.log('[AI Debug] Stream complete')
 
       // 更新会话历史
       session.messages.push(
         { id: `msg_${Date.now()}_user`, role: 'user', type: 'text', content: input, timestamp: Date.now() },
-        { id: `msg_${Date.now()}_ai`, role: 'assistant', type: 'text', content: fullResponse, timestamp: Date.now() }
+        { id: `msg_${Date.now()}_ai`, role: 'assistant', type: 'text', content: content, timestamp: Date.now() }
       )
       session.updatedAt = Date.now()
 
-      // 完成
-      yield {
-        type: 'complete',
-        summary: '对话完成'
-      }
-
     } catch (error) {
-      console.error('Agent 执行错误:', error)
+      console.error('[AI Debug] Agent 执行错误:', error)
       yield {
         type: 'error',
         message: error instanceof Error ? error.message : 'AI 执行失败',

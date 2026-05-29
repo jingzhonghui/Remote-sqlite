@@ -293,7 +293,11 @@ export const useAIStore = create<AIState>()((set, get) => ({
     
     switch (event.type) {
       case 'token':
-        if (streamState.status === 'streaming') {
+        // 如果还在 idle 状态，自动开始 streaming
+        if (streamState.status === 'idle') {
+          get().startStreaming()
+        }
+        if (streamState.status === 'streaming' || streamState.status === 'tool_calling') {
           get().appendStreamText(event.content)
           if (lastMessage && lastMessage.role === 'assistant') {
             get().updateMessage(lastMessage.id, {

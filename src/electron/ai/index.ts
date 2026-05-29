@@ -78,10 +78,12 @@ export function registerAIIPC(): void {
   }) => {
     const { input, context, sessionId } = params
     const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    
+    console.log('[AI Debug IPC] Received chat-stream request, streamId:', streamId)
+
     try {
       const agent = agentManager.getAgent()
       if (!agent) {
+        console.log('[AI Debug IPC] Agent not initialized')
         event.reply('ai:stream-error', {
           streamId,
           error: 'AI Agent 未初始化'
@@ -90,6 +92,7 @@ export function registerAIIPC(): void {
       }
 
       const config = getAIConfig()
+      console.log('[AI Debug IPC] AI enabled:', config.enabled, 'Has API key:', !!config.apiKey)
       if (!config.enabled || !config.apiKey) {
         event.reply('ai:stream-error', {
           streamId,
@@ -103,14 +106,21 @@ export function registerAIIPC(): void {
       activeStreams.set(streamId, abortController)
 
       // 发送开始事件
+      console.log('[AI Debug IPC] Sending stream-start')
       event.reply('ai:stream-start', { streamId })
 
       // 执行流式对话
+      console.log('[AI Debug IPC] Starting chatStream generator')
       const stream = agent.chatStream(input, context, sessionId)
-      
+      let chunkCount = 0
+
       for await (const chunk of stream) {
+        chunkCount++
+        console.log(`[AI Debug IPC] Chunk ${chunkCount}:`, chunk.type)
+
         // 检查是否已中止
         if (abortController.signal.aborted) {
+          console.log('[AI Debug IPC] Stream aborted')
           break
         }
 
@@ -121,11 +131,13 @@ export function registerAIIPC(): void {
 
         // 如果是完成或错误事件，清理资源
         if (chunk.type === 'complete' || chunk.type === 'error') {
+          console.log('[AI Debug IPC] Stream ended with type:', chunk.type)
           activeStreams.delete(streamId)
         }
       }
+      console.log('[AI Debug IPC] Total chunks sent:', chunkCount)
     } catch (error) {
-      console.error('AI 流式对话错误:', error)
+      console.error('[AI Debug IPC] AI 流式对话错误:', error)
       event.reply('ai:stream-error', {
         streamId,
         error: error instanceof Error ? error.message : '流式对话失败'

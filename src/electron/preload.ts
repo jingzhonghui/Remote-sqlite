@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { DatabaseContext, AIConfig, StreamEvent, ChatSession } from '../src/types/ai'
 
 // 暴露给渲染进程的 API
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -19,6 +20,67 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sqlite:get-table-info', connectionId, dbPath, tableName),
     getIndexes: (connectionId: string, dbPath: string, tableName: string) => 
       ipcRenderer.invoke('sqlite:get-indexes', connectionId, dbPath, tableName),
+  },
+  // AI 助手
+  ai: {
+    getConfig: () => ipcRenderer.invoke('ai:get-config'),
+    setConfig: (config: Partial<AIConfig>) => ipcRenderer.invoke('ai:set-config', config),
+    
+    chatStream: (
+      params: { input: string; context: DatabaseContext; sessionId?: string },
+      callbacks: {
+        onStart?: (streamId: string) => void
+        onChunk?: (streamId: string, chunk: StreamEvent) => void
+        onError?: (streamId: string, error: string) => void
+      }
+    ) => {
+      const { input, context, sessionId } = params
+      
+      // 监听流式事件
+      const handleStart = (_: any, data: { streamId: string }) => {
+        callbacks.onStart?.(data.streamId)
+      }
+      
+      const handleChunk = (_: any, data: { streamId: string; chunk: StreamEvent }) => {
+        callbacks.onChunk?.(data.streamId, data.chunk)
+      }
+      
+      const handleError = (_: any, data: { streamId: string; error: string }) => {
+        callbacks.onError?.(data.streamId, data.error)
+        cleanup()
+      }
+      
+      ipcRenderer.on('ai:stream-start', handleStart)
+      ipcRenderer.on('ai:stream-chunk', handleChunk)
+      ipcRenderer.on('ai:stream-error', handleError)
+      
+      // 启动流式对话
+      ipcRenderer.send('ai:chat-stream', { input, context, sessionId })
+      
+      // 清理函数
+      const cleanup = () => {
+        ipcRenderer.removeListener('ai:stream-start', handleStart)
+        ipcRenderer.removeListener('ai:stream-chunk', handleChunk)
+        ipcRenderer.removeListener('ai:stream-error', handleError)
+      }
+      
+      // 返回中止函数
+      return () => {
+        ipcRenderer.send('ai:abort-stream', sessionId)
+        cleanup()
+      }
+    },
+    
+    generateSQL: (params: { description: string; context: DatabaseContext }) => 
+      ipcRenderer.invoke('ai:generate-sql', params),
+    
+    diagnoseError: (params: { sql: string; error: string; context: DatabaseContext }) => 
+      ipcRenderer.invoke('ai:diagnose-error', params),
+    
+    getSessions: () => ipcRenderer.invoke('ai:get-sessions'),
+    getSession: (sessionId: string) => ipcRenderer.invoke('ai:get-session', sessionId),
+    deleteSession: (sessionId: string) => ipcRenderer.invoke('ai:delete-session', sessionId),
+    clearSessions: () => ipcRenderer.invoke('ai:clear-sessions'),
   },
 })
 
@@ -65,6 +127,24 @@ declare global {
         getTables: (connectionId: string, dbPath: string) => Promise<{ success: boolean; tables: string[]; message?: string }>
         getTableInfo: (connectionId: string, dbPath: string, tableName: string) => Promise<{ success: boolean; columns: any[]; message?: string }>
         getIndexes: (connectionId: string, dbPath: string, tableName: string) => Promise<{ success: boolean; indexes: any[]; message?: string }>
+      }
+      ai: {
+        getConfig: () => Promise<AIConfig>
+        setConfig: (config: Partial<AIConfig>) => Promise<{ success: boolean; message?: string }>
+        chatStream: (
+          params: { input: string; context: DatabaseContext; sessionId?: string },
+          callbacks: {
+            onStart?: (streamId: string) => void
+            onChunk?: (streamId: string, chunk: StreamEvent) => void
+            onError?: (streamId: string, error: string) => void
+          }
+        ) => () => void
+        generateSQL: (params: { description: string; context: DatabaseContext }) => Promise<{ success: boolean; sql?: string; explanation?: string; safety?: string; message?: string }>
+        diagnoseError: (params: { sql: string; error: string; context: DatabaseContext }) => Promise<{ success: boolean; diagnosis?: string; suggestion?: string; fixedSQL?: string; message?: string }>
+        getSessions: () => Promise<{ success: boolean; sessions?: ChatSession[]; message?: string }>
+        getSession: (sessionId: string) => Promise<{ success: boolean; session?: ChatSession | null; message?: string }>
+        deleteSession: (sessionId: string) => Promise<{ success: boolean; message?: string }>
+        clearSessions: () => Promise<{ success: boolean; message?: string }>
       }
     }
   }

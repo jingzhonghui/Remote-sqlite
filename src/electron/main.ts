@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { SSHService } from './services/sshService'
 import { SQLiteService } from './services/sqliteService'
+import { initializeAI, registerAIIPC } from './ai'
 
 // ESM 中 __dirname 不可用，需要手动创建
 const __filename = fileURLToPath(import.meta.url)
@@ -88,6 +89,9 @@ function setupIPC() {
   ipcMain.handle('ssh:list-directory', async (_, connectionId, dirPath) => {
     return sshService.listDirectory(connectionId, dirPath)
   })
+
+  // AI 助手 IPC
+  registerAIIPC()
 }
 
 // 移除默认菜单栏
@@ -96,6 +100,9 @@ Menu.setApplicationMenu(null)
 app.whenReady().then(() => {
   createWindow()
   setupIPC()
+  
+  // 初始化 AI 模块
+  initializeAI(sqliteService, sshService)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

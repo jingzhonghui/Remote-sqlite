@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { SSHConfig, Connection, ConnectionPool, DatabaseInfo, SqlHistory, TableDesign, DesignerTab } from '../types'
+import type { AIConfig, ChatSession } from '../types/ai'
+import { DEFAULT_AI_CONFIG } from '../types/ai'
 
 export type Theme = 'dark' | 'light'
 
@@ -31,6 +33,11 @@ interface AppState {
   // 可视化设计器标签页
   designerTabs: DesignerTab[]
   activeDesignerTabId: string | null
+  
+  // AI 助手
+  aiConfig: AIConfig
+  aiSessions: ChatSession[]
+  currentAISessionId: string | null
   
   // Actions - 连接管理
   addConnection: (config: SSHConfig) => void
@@ -70,6 +77,16 @@ interface AppState {
   
   // Actions - 字体大小
   setFontSize: (size: number) => void
+  
+  // Actions - AI 配置
+  setAIConfig: (config: Partial<AIConfig>) => void
+  resetAIConfig: () => void
+  
+  // Actions - AI 会话
+  addAISession: (session: ChatSession) => void
+  removeAISession: (sessionId: string) => void
+  setCurrentAISessionId: (sessionId: string | null) => void
+  clearAISessions: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -89,6 +106,11 @@ export const useAppStore = create<AppState>()(
       currentTableDesign: null,
       designerTabs: [],
       activeDesignerTabId: null,
+      
+      // AI 助手初始状态
+      aiConfig: DEFAULT_AI_CONFIG,
+      aiSessions: [],
+      currentAISessionId: null,
 
       // Actions - 连接管理
       addConnection: (config) =>
@@ -325,6 +347,47 @@ export const useAppStore = create<AppState>()(
         set(() => ({
           fontSize: size,
         })),
+      
+      // Actions - AI 配置
+      setAIConfig: (config) =>
+        set((state) => ({
+          aiConfig: { ...state.aiConfig, ...config },
+        })),
+      
+      resetAIConfig: () =>
+        set(() => ({
+          aiConfig: DEFAULT_AI_CONFIG,
+        })),
+      
+      // Actions - AI 会话
+      addAISession: (session) =>
+        set((state) => ({
+          aiSessions: [...state.aiSessions, session],
+          currentAISessionId: session.id,
+        })),
+      
+      removeAISession: (sessionId) =>
+        set((state) => {
+          const newSessions = state.aiSessions.filter((s) => s.id !== sessionId)
+          return {
+            aiSessions: newSessions,
+            currentAISessionId:
+              state.currentAISessionId === sessionId
+                ? newSessions[newSessions.length - 1]?.id || null
+                : state.currentAISessionId,
+          }
+        }),
+      
+      setCurrentAISessionId: (sessionId) =>
+        set(() => ({
+          currentAISessionId: sessionId,
+        })),
+      
+      clearAISessions: () =>
+        set(() => ({
+          aiSessions: [],
+          currentAISessionId: null,
+        })),
     }),
     {
       name: 'remote-sqlite-storage',
@@ -336,6 +399,11 @@ export const useAppStore = create<AppState>()(
         databases: state.databases,
         currentDatabase: state.currentDatabase,
         selectedTable: state.selectedTable,
+        // AI 配置持久化（API Key 除外，需要加密存储）
+        aiConfig: {
+          ...state.aiConfig,
+          apiKey: '', // 不持久化 API Key，需要通过 IPC 加密存储
+        },
       }),
     }
   )

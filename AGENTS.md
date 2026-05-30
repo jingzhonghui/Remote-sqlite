@@ -10,31 +10,28 @@
 
 ```
 remote-sqlite/
-├── src/                          # 源码根目录
-│   ├── electron/                 # Electron 主进程
-│   │   ├── main.ts              # 主入口、窗口创建、IPC 处理器
-│   │   ├── preload.ts           # 预加载脚本（contextBridge）
-│   │   └── services/            # SSH/SQLite 服务层
-│   ├── src/                     # 渲染进程 (React)
-│   │   ├── components/          # React 组件
-│   │   ├── pages/               # 页面组件
-│   │   │   ├── ConnectionPage.tsx
-│   │   │   ├── DatabasePage.tsx
-│   │   │   ├── SqlEditorPage.tsx
-│   │   │   └── TableDesignerPage.tsx
-│   │   ├── stores/              # Zustand 状态管理
-│   │   └── types/               # TypeScript 类型定义
-│   ├── package.json
-│   └── vite.config.ts
+|                         # 源码根目录
+├── electron/                 # Electron 主进程
+│   ├── main.ts              # 主入口、窗口创建、IPC 处理器
+│   ├── preload.ts           # 预加载脚本（contextBridge）
+│   └── services/            # SSH/SQLite 服务层
+├── src/                     # 渲染进程 (React)
+│   ├── components/          # React 组件
+│   ├── pages/               # 页面组件
+│   │   ├── ConnectionPage.tsx
+│   │   ├── DatabasePage.tsx
+│   │   ├── SqlEditorPage.tsx
+│   │   └── TableDesignerPage.tsx
+│   ├── stores/              # Zustand 状态管理
+│   └── types/               # TypeScript 类型定义
+├── package.json
+├── vite.config.ts
 └── docs/                         # 文档目录
 ```
 
 ## 开发命令
 
-**所有命令都在 `src/` 目录下执行：**
-
 ```bash
-cd src
 
 # 开发模式（启动 Vite + Electron）
 npm run dev
@@ -112,8 +109,7 @@ GitHub Actions 工作流 (`.github/workflows/release.yml`):
 
 1. **preload 路径错误**: 必须使用 `preload.mjs`，不是 `preload.cjs` 或 `preload.js`
 2. **开发模式端口**: Vite 默认使用 5173，如被占用会自动切换到 5174
-3. **工作目录**: 所有 npm 命令必须在 `src/` 目录下执行
-4. **原生模块**: 不要尝试打包 ssh2 等原生模块，保持 external 配置
+3. **原生模块**: 不要尝试打包 ssh2 等原生模块，保持 external 配置
 
 ## 文档参考
 

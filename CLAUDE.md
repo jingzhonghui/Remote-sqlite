@@ -8,11 +8,7 @@ RemoteSQLite is an Electron-based desktop application for managing remote SQLite
 
 ## Development Commands
 
-All commands should be run from the `src/` directory:
-
 ```bash
-cd src
-
 # Development
 npm run dev                 # Start Vite dev server (browser preview only)
 npm run electron:dev        # Start Electron in development mode with hot reload
@@ -41,31 +37,31 @@ npm run postinstall         # Rebuild native modules (ssh2, cpu-features) for El
 
 The application follows Electron's multi-process model:
 
-**Main Process** (`src/electron/main.ts`)
+**Main Process** (`electron/main.ts`)
 - Creates the application window
 - Manages system-level IPC handlers
 - Initializes services (SSH, SQLite, AI)
 - Does NOT have direct access to DOM or browser APIs
 
-**Renderer Process** (`src/src/` - React app)
+**Renderer Process** (`src/` - React app)
 - Standard React 18 + TypeScript application
 - Communicates with main process through `window.electronAPI` (exposed via preload)
 - Uses Zustand for state management
 
-**Preload Script** (`src/electron/preload.ts`)
+**Preload Script** (`electron/preload.ts`)
 - Bridges main and renderer processes securely using `contextBridge`
 - Exposes `window.electronAPI` with three namespaces: `ssh`, `sqlite`, `ai`
 - Type definitions for the exposed API are in this file
 
 ### Service Layer (Main Process)
 
-**SSHService** (`src/electron/services/sshService.ts`)
+**SSHService** (`electron/services/sshService.ts`)
 - Manages SSH connections using the `ssh2` library
 - Maintains a connection pool (Map of active connections)
 - Handles authentication: password, private key, SSH Agent
 - Provides remote command execution and directory listing
 
-**SQLiteService** (`src/electron/services/sqliteService.ts`)
+**SQLiteService** (`electron/services/sqliteService.ts`)
 - Depends on SSHService for command execution
 - Wraps `sqlite3` CLI commands executed on remote servers
 - Key methods: `query()`, `execute()`, `getTables()`, `getTableInfo()`, `getIndexes()`
@@ -75,28 +71,28 @@ The application follows Electron's multi-process model:
 
 The AI assistant is integrated into the main process using LangChain:
 
-**Entry Point** (`src/electron/ai/index.ts`)
+**Entry Point** (`electron/ai/index.ts`)
 - Initializes the SQLAgent with service dependencies
 - Registers IPC handlers for AI operations
 - Manages streaming responses via EventEmitter
 
-**SQLAgent** (`src/electron/ai/agents/sql-agent.ts`)
+**SQLAgent** (`electron/ai/agents/sql-agent.ts`)
 - LangChain-based ReAct agent for SQL generation and analysis
 - Maintains chat sessions with conversation history
 - Implements safety classification (SAFE/WARNING/DANGEROUS) for SQL operations
 - Stream-based response handling for real-time UI updates
 
-**Tools** (`src/electron/ai/tools/sql-tools.ts`)
+**Tools** (`electron/ai/tools/sql-tools.ts`)
 - Six core tools: `get_database_schema`, `get_table_info`, `execute_query`, `execute_dml`, `analyze_data`, `generate_and_execute`
 - Tools are registered with the LangChain agent for function calling
 
-**Configuration** (`src/electron/ai/config/provider-config.ts`)
+**Configuration** (`electron/ai/config/provider-config.ts`)
 - Manages AI provider settings (OpenAI or compatible APIs)
 - Persists configuration using electron-store
 
 ### State Management (Renderer Process)
 
-**Zustand Store** (`src/src/stores/useAppStore.ts`)
+**Zustand Store** (`src/stores/useAppStore.ts`)
 - Single store pattern with persistence middleware
 - Persists: `savedConnections`, `savedQueries`, `databases`, `theme`, `fontSize`, `aiConfig`
 - Runtime-only state (not persisted): `connectionPool`, `sqlHistory`, `designerTabs`
@@ -134,7 +130,7 @@ window.electronAPI.ai.chatStream(params, { onChunk: (streamId, chunk) => {...} }
 
 ### Database Schema and Types
 
-Core types are defined in `src/src/types/index.ts`:
+Core types are defined in `src/types/index.ts`:
 
 - `SSHConfig`: Connection configuration (auth credentials, jump host)
 - `Connection`: Active connection with runtime state (status, timestamps)
@@ -142,19 +138,19 @@ Core types are defined in `src/src/types/index.ts`:
 - `ColumnInfo`: Table column metadata from `PRAGMA table_info`
 - `DesignerTab`: Multi-tab table designer state
 
-AI-specific types are in `src/src/types/ai.ts`:
+AI-specific types are in `src/types/ai.ts`:
 - `AIConfig`: Provider settings, execution policies, analysis options
 - `StreamEvent`: Union type for all possible stream response events
 - `ChatSession`: Conversation history and metadata
 
 ### Build Configuration
 
-**Vite** (`src/vite.config.ts`):
+**Vite** (`vite.config.ts`):
 - Uses `vite-plugin-electron` for main/preload bundling
 - Externalizes native modules: `ssh2`, `cpu-features`, `nan`
 - Monaco Editor is dependency-optimized for faster dev startup
 
-**electron-builder** (`src/package.json` build section):
+**electron-builder** (`package.json` build section):
 - `asar: false` - Native modules require filesystem access
 - Explicit file inclusion for native modules and their dependencies
 - Platform-specific targets defined (NSIS for Windows, AppImage/deb/rpm for Linux)
@@ -177,7 +173,7 @@ When modifying AI-related code:
 
 2. **Streaming flow**: `chatStream()` returns an AsyncGenerator that yields `StreamEvent` objects. The IPC layer handles converting this to renderer events.
 
-3. **Safety classification**: SQL statements are classified as SAFE (SELECT), WARNING (INSERT/UPDATE/DELETE with WHERE), or DANGEROUS (DROP, ALTER, DELETE without WHERE). Classification logic is in `src/electron/ai/utils/sql-safety.ts`.
+3. **Safety classification**: SQL statements are classified as SAFE (SELECT), WARNING (INSERT/UPDATE/DELETE with WHERE), or DANGEROUS (DROP, ALTER, DELETE without WHERE). Classification logic is in `electron/ai/utils/sql-safety.ts`.
 
 4. **Adding new tools**: Define the tool in `sql-tools.ts`, register it in the agent's tool list, and add appropriate TypeScript types.
 
@@ -192,8 +188,8 @@ The `ssh2` library depends on native C++ modules (`cpu-features`). Key points:
 
 ## File Locations for Common Tasks
 
-- **Add new IPC handler**: Register in `src/electron/main.ts`, expose in `src/electron/preload.ts`, add type in preload's `declare global` block
-- **Add new page**: Create component in `src/src/pages/`, add to `src/src/App.tsx` tab rendering logic
-- **Modify database operations**: Edit `src/electron/services/sqliteService.ts`
-- **Add AI capability**: Extend `src/electron/ai/agents/sql-agent.ts` or add tool in `src/electron/ai/tools/sql-tools.ts`
-- **Change persisted state**: Update Zustand store in `src/src/stores/useAppStore.ts` and configure `partialize` for persistence
+- **Add new IPC handler**: Register in `electron/main.ts`, expose in `electron/preload.ts`, add type in preload's `declare global` block
+- **Add new page**: Create component in `src/pages/`, add to `src/App.tsx` tab rendering logic
+- **Modify database operations**: Edit `electron/services/sqliteService.ts`
+- **Add AI capability**: Extend `electron/ai/agents/sql-agent.ts` or add tool in `electron/ai/tools/sql-tools.ts`
+- **Change persisted state**: Update Zustand store in `src/stores/useAppStore.ts` and configure `partialize` for persistence

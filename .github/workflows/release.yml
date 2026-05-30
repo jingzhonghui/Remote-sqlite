@@ -42,20 +42,20 @@ jobs:
         with:
           node-version: '24.14.1'
           cache: 'npm'
-          cache-dependency-path: src/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Set version from tag
         run: node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));pkg.version=process.env.TAG_VERSION.replace(/^v/,'');fs.writeFileSync('package.json',JSON.stringify(pkg,null,2));console.log('Version:',pkg.version);"
-        working-directory: ./src
+        working-directory: ./
         env:
           TAG_VERSION: ${{ github.ref_name }}
 
       - name: Install dependencies
-        working-directory: ./src
+        working-directory: ./
         run: npm ci
 
       - name: Build application
-        working-directory: ./src
+        working-directory: ./
         run: ${{ matrix.build_cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -67,9 +67,9 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            # src/release/win-unpacked/*.exe
-            src/release/RemoteSQLite-*.zip
-            src/release/RemoteSQLite-*.exe
+            # release/win-unpacked/*.exe
+            release/RemoteSQLite-*.zip
+            release/RemoteSQLite-*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -79,10 +79,11 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            src/release/*.AppImage
-            src/release/*.deb
-            src/release/*.rpm
-            src/release/*.tar.gz
+            release/*.AppImage
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -92,8 +93,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            src/release/*.dmg
-            src/release/mac/*.app
+            release/*.dmg
+            release/mac/*.app
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -101,7 +102,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: src/release/**/*
+          path: release/**/*
           retention-days: 7
 
   release-pr:

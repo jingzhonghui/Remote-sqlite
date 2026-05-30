@@ -40,11 +40,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handleStart = (_: any, data: { streamId: string }) => {
         callbacks.onStart?.(data.streamId)
       }
-      
+
       const handleChunk = (_: any, data: { streamId: string; chunk: StreamEvent }) => {
         callbacks.onChunk?.(data.streamId, data.chunk)
       }
-      
+
       const handleError = (_: any, data: { streamId: string; error: string }) => {
         callbacks.onError?.(data.streamId, data.error)
         cleanup()

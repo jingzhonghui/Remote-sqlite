@@ -1,20 +1,22 @@
 /**
  * SQL Agent 核心实现
- * 
- * 基于 LangChain v1 的 ReAct Agent
+ *
+ * 基于 LangChain v1 的 createAgent ReAct Agent
+ * 使用官方推荐的 agent 抽象替代手动工具调用循环
  */
 
 import { ChatOpenAI } from '@langchain/openai'
 import { createAgent } from 'langchain'
-import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
+import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
 import type { BaseMessage } from '@langchain/core/messages'
+import type { StreamEvent as LCStreamEvent } from '@langchain/core/tracers/log_stream'
 import type { SQLiteService } from '../../services/sqliteService'
 import type { SSHService } from '../../services/sshService'
-import type { 
-  DatabaseContext, 
-  StreamEvent, 
+import type {
+  DatabaseContext,
+  StreamEvent,
   AIConfig,
-  ChatSession 
+  ChatSession
 } from '../../../src/types/ai'
 import { buildSystemPrompt } from '../prompts/sql-prompts'
 import { createAllTools, type ToolContext } from '../tools/sql-tools'
@@ -22,6 +24,12 @@ import { classifySQLSafety } from '../utils/sql-safety'
 
 /**
  * SQL Agent 类
+ *
+ * 使用 LangChain 官方推荐的 createAgent 方式：
+ * - 自动管理工具调用循环（无需手动编写 while 循环）
+ * - 内置递归限制和错误恢复
+ * - 支持真正的 LLM token 流式输出
+ * - 支持中间件扩展
  */
 export class SQLAgent {
   private sqliteService: SQLiteService
@@ -77,7 +85,129 @@ export class SQLAgent {
   }
 
   /**
+   * 创建 Agent 实例
+   *
+   * 使用 LangChain 官方推荐的 createAgent 替代手动工具调用循环。
+   * Agent 内部自动处理：
+   * - 模型推理 → 工具选择 → 工具执行 → 结果反馈 → 再次推理 的完整循环
+   * - 递归限制（默认防止无限循环）
+   * - 并行工具调用
+   * - 错误恢复
+   */
+  private createAgentInstance(dbContext: DatabaseContext) {
+    const toolContext = this.createToolContext(dbContext)
+    const tools = createAllTools(toolContext)
+    const model = this.createModel()
+
+    return createAgent({
+      model: model as any,
+      tools: tools as any,
+      // prompt 不传，因为我们在 streamEvents 的 messages 中已包含 SystemMessage
+    })
+  }
+
+  /**
+   * 构建对话消息历史
+   */
+  private buildMessages(input: string, session: ChatSession, dbContext: DatabaseContext): BaseMessage[] {
+    return [
+      new SystemMessage(buildSystemPrompt(dbContext)),
+      ...session.messages.slice(-this.config.context.maxHistoryMessages).map(m => {
+        if (m.role === 'user') {
+          return new HumanMessage(m.content)
+        } else if (m.role === 'assistant') {
+          return new AIMessage(m.content)
+        }
+        return new SystemMessage(m.content)
+      }),
+      new HumanMessage(input)
+    ]
+  }
+
+  /**
+   * 将 LangChain StreamEvent 映射为应用内部的 StreamEvent
+   */
+  private *mapLangChainEventToAppEvent(event: LCStreamEvent): Generator<StreamEvent, void, unknown> {
+    // LLM token 流式输出 —— 真正的实时 token，非事后拆分
+    // streamEvents v1 在 LangGraph 中可能使用 "on_llm_stream" 而非 "on_chat_model_stream"
+    if (event.event === 'on_chat_model_stream' || event.event === 'on_llm_stream') {
+      const chunk = event.data?.chunk as any
+      if (chunk) {
+        let token = ''
+
+        // 方式1：AIMessageChunk 直接有 content 字段
+        if (typeof chunk.content === 'string') {
+          token = chunk.content
+        } else if (chunk.content && Array.isArray(chunk.content)) {
+          token = chunk.content.map((c: any) => typeof c === 'string' ? c : c.text || '').join('')
+        }
+        // 方式2：原始 chunk 格式，text 字段
+        if (!token && chunk.text) {
+          token = chunk.text
+        }
+        // 方式3：消息序列化格式：message.kwargs.content
+        if (!token && chunk.message?.kwargs?.content) {
+          token = chunk.message.kwargs.content
+        }
+        // 方式4：DeepSeek 推理内容（在 additional_kwargs.reasoning_content 中）
+        if (!token && chunk.message?.kwargs?.additional_kwargs?.reasoning_content) {
+          token = chunk.message.kwargs.additional_kwargs.reasoning_content
+        }
+
+        if (token) {
+          yield { type: 'token', content: token }
+        }
+      }
+      return
+    }
+
+    // 工具调用开始
+    if (event.event === 'on_tool_start') {
+      yield {
+        type: 'tool_start',
+        tool: event.name,
+        params: event.data?.input
+      }
+      return
+    }
+
+    // 工具调用结束
+    if (event.event === 'on_tool_end') {
+      const result = event.data?.output
+
+      // 特殊处理：将查询结果和 schema 结果映射为 sql_result 事件，供前端展示
+      if (event.name === 'execute_query' && result?.success) {
+        yield { type: 'sql_result', result }
+      } else if (event.name === 'get_database_schema' && result?.success) {
+        yield { type: 'sql_result', result: { success: true, schema: result.schema } }
+      }
+
+      yield {
+        type: 'tool_end',
+        tool: event.name,
+        result
+      }
+      return
+    }
+
+    // Agent/Chain 执行出错
+    if (event.event === 'on_chain_end' && event.data?.error) {
+      yield {
+        type: 'error',
+        message: String(event.data.error),
+        code: 'AGENT_ERROR'
+      }
+      return
+    }
+  }
+
+  /**
    * 流式对话
+   *
+   * 使用 createAgent + streamEvents 实现真正的流式输出：
+   * - LLM token 实时流式传输（不再是事后逐字符拆分）
+   * - 工具调用事件实时推送
+   * - Agent 内部自动管理工具调用循环
    */
   async *chatStream(
     input: string,
@@ -97,89 +227,43 @@ export class SQLAgent {
       // 获取或创建会话
       const session = this.getOrCreateSession(sessionId, dbContext)
       this.currentSessionId = session.id
-
-      // 先发送一个 token 表示开始处理
+      // 发送开始标记
       yield { type: 'token', content: '' }
 
+      // 创建 Agent（内部自动绑定工具）
+      const agent = this.createAgentInstance(dbContext)
+
       // 构建消息历史
-      const messages: BaseMessage[] = [
-        new SystemMessage(buildSystemPrompt(dbContext)),
-        ...session.messages.slice(-this.config.context.maxHistoryMessages).map(m => {
-          if (m.role === 'user') {
-            return new HumanMessage(m.content)
-          } else if (m.role === 'assistant') {
-            return new AIMessage(m.content)
-          }
-          return new SystemMessage(m.content)
-        }),
-        new HumanMessage(input)
-      ]
+      const messages = this.buildMessages(input, session, dbContext)
 
-      // 创建模型
-      const model = this.createModel()
-
-      // 绑定工具以实现函数调用
-      const toolContext = this.createToolContext(dbContext)
-      const tools = createAllTools(toolContext)
-      const modelWithTools = model.bindTools(tools)
-      // 第一轮：模型决定是否调用工具
-      let response = await modelWithTools.invoke(messages)
-      messages.push(response)
-
-      // 处理工具调用（最多 3 轮）
-      let rounds = 0
-      while (response.tool_calls && response.tool_calls.length > 0 && rounds < 3) {
-        rounds++
-
-        for (const toolCall of response.tool_calls) {
-          yield { type: 'tool_start', tool: toolCall.name ?? 'unknown' }
-
-          try {
-            const langchainTool = tools.find(t => t.name === toolCall.name)
-            if (!langchainTool) {
-              throw new Error('Unknown tool: ' + toolCall.name)
-            }
-
-            const result = await langchainTool.invoke(toolCall.args)
-
-            if (toolCall.name === 'execute_query' && result?.success) {
-              yield { type: 'sql_result', result }
-            } else if (toolCall.name === 'get_database_schema' && result?.success) {
-              yield { type: 'sql_result', result: { schema: result.schema } }
-            }
-
-            messages.push(new ToolMessage(JSON.stringify(result), toolCall.id ?? ''))
-
-            yield { type: 'tool_end', tool: toolCall.name, result }
-          } catch (err: any) {
-            const errMsg = err instanceof Error ? err.message : 'Tool execution failed'
-            messages.push(new ToolMessage(JSON.stringify({ error: errMsg }), toolCall.id ?? ''))
-            yield { type: 'tool_end', tool: toolCall.name ?? 'unknown', result: { error: errMsg } }
-          }
-        }
-
-        response = await modelWithTools.invoke(messages)
-        messages.push(response)
+      // 使用 streamEvents 获取真正的流式事件
+      let stream: any
+      try {
+        stream = agent.streamEvents(
+          { messages },
+          { version: 'v1' }
+        )
+      } catch (e) {
+        yield { type: 'error', message: 'streamEvents 调用失败: ' + (e instanceof Error ? e.message : String(e)), code: 'STREAM_ERROR' }
+        return
       }
 
-      // Extract final text content
-      let content = ''
-      if (typeof response.content === 'string') {
-        content = response.content
-      } else if (Array.isArray(response.content)) {
-        content = response.content.map((c: any) => typeof c === 'string' ? c : c.text || '').join('')
-      } else if ((response as any).text) {
-        content = (response as any).text
-      }
+      let fullContent = ''
 
-      // 流式输出响应
-      if (content) {
-        const chunks = content.split('')
-        for (const char of chunks) {
-          yield { type: 'token', content: char }
-          // 小延迟模拟流式效果
-          await new Promise(resolve => setTimeout(resolve, 10))
+      try {
+        for await (const event of stream) {
+          const appEvents = Array.from(this.mapLangChainEventToAppEvent(event as LCStreamEvent))
+
+          for (const appEvent of appEvents) {
+            if (appEvent.type === 'token') {
+              fullContent += appEvent.content
+            }
+            yield appEvent
+          }
         }
+      } catch (loopErr) {
+        yield { type: 'error', message: '流读取失败: ' + (loopErr instanceof Error ? loopErr.message : String(loopErr)), code: 'LOOP_ERROR' }
+        return
       }
 
       // 发送完成事件
@@ -188,11 +272,12 @@ export class SQLAgent {
       // 更新会话历史
       session.messages.push(
         { id: `msg_${Date.now()}_user`, role: 'user', type: 'text', content: input, timestamp: Date.now() },
-        { id: `msg_${Date.now()}_ai`, role: 'assistant', type: 'text', content: content, timestamp: Date.now() }
+        { id: `msg_${Date.now()}_ai`, role: 'assistant', type: 'text', content: fullContent, timestamp: Date.now() }
       )
       session.updatedAt = Date.now()
 
     } catch (error) {
+      console.error('[DEBUG chatStream] ERROR:', error)
       yield {
         type: 'error',
         message: error instanceof Error ? error.message : 'AI 执行失败',
@@ -203,6 +288,8 @@ export class SQLAgent {
 
   /**
    * 单轮 SQL 生成
+   *
+   * 纯 LLM 调用，无需工具，保持简单直接
    */
   async generateSQL(
     description: string,
@@ -241,6 +328,8 @@ SQL：`
 
   /**
    * 诊断 SQL 错误
+   *
+   * 纯 LLM 调用，无需工具
    */
   async diagnoseError(
     sql: string,
@@ -268,12 +357,12 @@ ${error}
       ])
 
       const content = response.content.toString()
-      
+
       // 简单解析响应
       const lines = content.split('\n')
       const diagnosis = lines.find(l => l.includes('原因') || l.includes('错误')) || '未知错误'
       const suggestion = lines.find(l => l.includes('建议') || l.includes('修复')) || '请检查 SQL 语法'
-      
+
       // 尝试提取修复后的 SQL
       const sqlMatch = content.match(/```sql\s*([\s\S]*?)\s*```/)
       const fixedSQL = sqlMatch ? sqlMatch[1].trim() : undefined

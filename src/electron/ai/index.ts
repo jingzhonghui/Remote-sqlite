@@ -1,7 +1,8 @@
 /**
  * AI 模块入口
- * 
+ *
  * 负责初始化 AI 功能、注册 IPC 处理器、管理 Agent 生命周期
+ * 基于 LangChain v1 createAgent 的 ReAct Agent
  */
 
 import { ipcMain, type IpcMainEvent } from 'electron'
@@ -9,22 +10,12 @@ import type { SQLiteService } from '../services/sqliteService'
 import type { SSHService } from '../services/sshService'
 import { SQLAgent, agentManager } from './agents/sql-agent'
 import { getAIConfig, setAIConfig, isAIEnabled } from './config/provider-config'
-import type { 
-  AIConfig, 
-  DatabaseContext, 
+import type {
+  AIConfig,
+  DatabaseContext,
   StreamEvent,
-  ChatSession 
+  ChatSession
 } from '../../src/types/ai'
-
-// LangChain 模块是 ESM，需要动态导入
-let langchainModules: any = null
-
-async function loadLangchainModules() {
-  if (!langchainModules) {
-    langchainModules = await import('langchain')
-  }
-  return langchainModules
-}
 
 // 活跃的流式连接
 const activeStreams = new Map<string, AbortController>()
@@ -78,7 +69,7 @@ export function registerAIIPC(): void {
   }) => {
     const { input, context, sessionId } = params
     const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    
+
     try {
       const agent = agentManager.getAgent()
       if (!agent) {
@@ -107,10 +98,8 @@ export function registerAIIPC(): void {
 
       // 执行流式对话
       const stream = agent.chatStream(input, context, sessionId)
-      let chunkCount = 0
 
       for await (const chunk of stream) {
-        chunkCount++
         // 检查是否已中止
         if (abortController.signal.aborted) {
           break

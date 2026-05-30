@@ -288,24 +288,28 @@ export const useAIStore = create<AIState>()((set, get) => ({
 
   // Actions - 处理流式事件
   handleStreamEvent: (event) => {
-    const { streamState, messages } = get()
-    const lastMessage = messages[messages.length - 1]
-    
     switch (event.type) {
-      case 'token':
+      case 'token': {
+        // 每次操作后必须用 get() 重新获取最新状态，避免闭包陷阱
         // 如果还在 idle 状态，自动开始 streaming
-        if (streamState.status === 'idle') {
+        if (get().streamState.status === 'idle') {
           get().startStreaming()
         }
-        if (streamState.status === 'streaming' || streamState.status === 'tool_calling') {
+
+        const state = get()
+        if (state.streamState.status === 'streaming' || state.streamState.status === 'tool_calling') {
           get().appendStreamText(event.content)
-          if (lastMessage && lastMessage.role === 'assistant') {
-            get().updateMessage(lastMessage.id, {
-              content: streamState.text + event.content,
+
+          const latestState = get()
+          const currentLastMessage = latestState.messages[latestState.messages.length - 1]
+          if (currentLastMessage?.role === 'assistant') {
+            get().updateMessage(currentLastMessage.id, {
+              content: latestState.streamState.text,
             })
           }
         }
         break
+      }
         
       case 'tool_start':
         get().setToolCalling(event.tool)
@@ -315,53 +319,55 @@ export const useAIStore = create<AIState>()((set, get) => ({
         get().endToolCalling()
         break
         
-      case 'sql_generated':
-        if (lastMessage && lastMessage.role === 'assistant') {
-          get().updateMessage(lastMessage.id, {
-            type: 'sql',
-            sql: event.sql,
-          })
+      case 'sql_generated': {
+        const msg1 = get().messages[get().messages.length - 1]
+        if (msg1?.role === 'assistant') {
+          get().updateMessage(msg1.id, { type: 'sql', sql: event.sql })
         }
         break
-        
-      case 'sql_result':
-        if (lastMessage && lastMessage.role === 'assistant') {
-          get().updateMessage(lastMessage.id, {
-            result: event.result,
-          })
+      }
+
+      case 'sql_result': {
+        const msg2 = get().messages[get().messages.length - 1]
+        if (msg2?.role === 'assistant') {
+          get().updateMessage(msg2.id, { result: event.result })
         }
         break
-        
-      case 'analysis':
-        if (lastMessage && lastMessage.role === 'assistant') {
-          get().updateMessage(lastMessage.id, {
-            type: 'analysis',
-            analysis: event.data,
-          })
+      }
+
+      case 'analysis': {
+        const msg3 = get().messages[get().messages.length - 1]
+        if (msg3?.role === 'assistant') {
+          get().updateMessage(msg3.id, { type: 'analysis', analysis: event.data })
         }
         break
-        
+      }
+
       case 'confirmation_required':
         get().setPendingConfirmation(event.operation)
         break
-        
+
       case 'complete':
         get().endStreaming()
-        if (lastMessage && lastMessage.role === 'assistant') {
-          get().updateMessage(lastMessage.id, {
-            isStreaming: false,
-          })
+        {
+          const msg4 = get().messages[get().messages.length - 1]
+          if (msg4?.role === 'assistant') {
+            get().updateMessage(msg4.id, { isStreaming: false })
+          }
         }
         break
-        
+
       case 'error':
         get().setStreamError(event.message)
-        if (lastMessage && lastMessage.role === 'assistant') {
-          get().updateMessage(lastMessage.id, {
-            type: 'error',
-            content: event.message,
-            isStreaming: false,
-          })
+        {
+          const msg5 = get().messages[get().messages.length - 1]
+          if (msg5?.role === 'assistant') {
+            get().updateMessage(msg5.id, {
+              type: 'error',
+              content: event.message,
+              isStreaming: false,
+            })
+          }
         }
         break
     }

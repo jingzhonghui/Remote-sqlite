@@ -226,7 +226,8 @@ export interface SQLExecutingEvent extends BaseStreamEvent {
 /** SQL 结果事件 */
 export interface SQLResultEvent extends BaseStreamEvent {
   type: 'sql_result'
-  result: QueryResult
+  /** 查询结果或 schema 结果等 */
+  result: any
 }
 
 /** 分析数据事件 */

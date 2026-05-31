@@ -211,7 +211,7 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     </div>
                     <div>
                       <p className="font-semibold text-text">RemoteSQLite</p>
-                      <p className="text-sm text-text-muted">版本 0.6.0</p>
+                      <p className="text-sm text-text-muted">版本 0.8.1</p>
                     </div>
                   </div>
                   <p className="text-sm text-text-muted leading-relaxed">

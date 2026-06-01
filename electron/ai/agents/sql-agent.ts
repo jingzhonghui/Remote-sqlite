@@ -435,6 +435,15 @@ ${error}
   }
 
   /**
+   * 设置/更新会话（用于从渲染进程同步）
+   */
+  setSession(session: ChatSession): void {
+    console.log('[SQLAgent] setSession 被调用，session:', { id: session.id, msgCount: session.messages?.length })
+    this.sessions.set(session.id, session)
+    console.log('[SQLAgent] setSession 完成，当前 sessions 数量:', this.sessions.size)
+  }
+
+  /**
    * 获取当前会话 ID
    */
   getCurrentSessionId(): string | null {

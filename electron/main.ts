@@ -102,15 +102,22 @@ function setupIPC() {
   registerAIIPC()
 
   // AI 弹出窗口
-  ipcMain.handle('ai:open-popout', async () => {
+  ipcMain.handle('ai:open-popout', async (_, sessionId?: string) => {
     if (popoutWindow && !popoutWindow.isDestroyed()) {
       popoutWindow.focus()
       return { success: true }
     }
 
-    const url = process.env.VITE_DEV_SERVER_URL
-      ? process.env.VITE_DEV_SERVER_URL + '#/popout/ai'
-      : `file://${path.join(__dirname, '../dist/index.html').replace(/\\/g, '/')}#/popout/ai`
+    // 构建 URL，携带会话 ID 参数
+    // 注意：hash 路由的参数应该放在 hash 后面
+    const baseUrl = process.env.VITE_DEV_SERVER_URL
+      ? process.env.VITE_DEV_SERVER_URL
+      : `file://${path.join(__dirname, '../dist/index.html').replace(/\\/g, '/')}`
+    const hashRoute = '#/popout/ai'
+    const sessionParam = sessionId ? `?sessionId=${sessionId}` : ''
+    const url = `${baseUrl}${hashRoute}${sessionParam}`
+
+    console.log('[Main] 打开弹出窗口，URL:', url)
 
     popoutWindow = new BrowserWindow({
       width: 520,

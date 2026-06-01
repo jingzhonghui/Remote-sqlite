@@ -48,6 +48,69 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
     return () => cleanup?.()
   }, [])
 
+  // 弹出窗口模式：从 URL 参数获取会话 ID，从主进程加载会话数据
+  useEffect(() => {
+    if (!isPopout) return
+
+    console.log('[AI Popout] 弹出窗口初始化，URL:', window.location.href)
+    console.log('[AI Popout] window.location.search:', window.location.search)
+    console.log('[AI Popout] window.location.hash:', window.location.hash)
+
+    const loadSessionFromMain = async () => {
+      try {
+        // 从 hash 中提取参数（hash 路由的参数在 # 后面）
+        // URL 格式: http://localhost:5173/#/popout/ai?sessionId=xxx
+        const hash = window.location.hash // "#/popout/ai?sessionId=xxx"
+        const queryString = hash.includes('?') ? hash.split('?')[1] : ''
+        const params = new URLSearchParams(queryString)
+        const sessionId = params.get('sessionId')
+
+        console.log('[AI Popout] 从 hash 解析 queryString:', queryString)
+        console.log('[AI Popout] 从 URL 获取 sessionId:', sessionId)
+
+        if (!sessionId) {
+          console.log('[AI Popout] 没有 sessionId，跳过加载')
+          return
+        }
+
+        // 从主进程获取会话数据
+        console.log('[AI Popout] 调用 getSession:', sessionId)
+        const result = await (window as any).electronAPI?.ai?.getSession(sessionId)
+        console.log('[AI Popout] getSession 返回:', result)
+
+        if (result?.success && result.session) {
+          console.log('[AI Popout] 获取到 session，消息数:', result.session.messages?.length)
+          console.log('[AI Popout] session 内容:', JSON.stringify(result.session, null, 2))
+
+          // 将会话数据同步到当前 store
+          const { sessions } = useAIStore.getState()
+          console.log('[AI Popout] 当前 store sessions:', sessions.length)
+
+          // 如果该会话不在列表中，添加到列表
+          if (!sessions.find((s: any) => s.id === sessionId)) {
+            useAIStore.setState({
+              sessions: [...sessions, result.session],
+            })
+            console.log('[AI Popout] session 已添加到 store')
+          }
+
+          // 切换到该会话
+          useAIStore.setState({
+            currentSessionId: sessionId,
+            messages: result.session.messages || [],
+          })
+          console.log('[AI Popout] 消息已设置到 store，条数:', result.session.messages?.length)
+        } else {
+          console.log('[AI Popout] 未获取到 session 或 session 为空')
+        }
+      } catch (error) {
+        console.error('[AI Popout] 加载会话数据失败:', error)
+      }
+    }
+
+    loadSessionFromMain()
+  }, [isPopout])
+
   // 处理弹出/还原
   const handlePopout = async () => {
     if (isPopout) {
@@ -56,8 +119,29 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
       setIsPopout(false)
       useAIStore.getState().setPanelOpen(true)
     } else {
-      // 弹出：打开独立窗口
-      const result = await (window as any).electronAPI?.ai?.openPopoutWindow()
+      console.log('[AI Sidebar] 点击弹出，当前 sessionId:', currentSessionId)
+      console.log('[AI Sidebar] 当前 sessions:', sessions.map((s: any) => ({ id: s.id, msgCount: s.messages?.length })))
+      console.log('[AI Sidebar] 当前 messages:', messages.length)
+
+      // 弹出前：先同步当前会话数据到主进程
+      if (currentSessionId) {
+        const currentSession = sessions.find((s: any) => s.id === currentSessionId)
+        console.log('[AI Sidebar] 找到的 currentSession:', currentSession ? { id: currentSession.id, msgCount: currentSession.messages?.length } : null)
+
+        if (currentSession) {
+          // 同步最新的消息数据到 session
+          const sessionToSync = { ...currentSession, messages }
+          console.log('[AI Sidebar] 准备同步到主进程:', { id: sessionToSync.id, msgCount: sessionToSync.messages?.length })
+          const syncResult = await (window as any).electronAPI?.ai?.syncSession(sessionToSync)
+          console.log('[AI Sidebar] syncSession 返回:', syncResult)
+        }
+      }
+
+      // 打开独立窗口，传递当前会话 ID
+      console.log('[AI Sidebar] 打开弹出窗口，sessionId:', currentSessionId)
+      const result = await (window as any).electronAPI?.ai?.openPopoutWindow(currentSessionId)
+      console.log('[AI Sidebar] openPopoutWindow 返回:', result)
+
       if (result?.success) {
         setIsPopout(true)
         onClose()
@@ -65,6 +149,13 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
     }
   }
   
+  // 从渲染进程的 Zustand store 获取：{
+  //   sessions: ChatSession[] - 所有会话列表
+  //   currentSessionId: string | null - 当前会话 ID
+  //   messages: ChatMessage[] - 当前会话的消息列表
+  //   ...
+  // }
+  // 注：弹出窗口模式时从主进程获取会话数据（见 useEffect）
   const {
     sessions,
     currentSessionId,

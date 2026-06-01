@@ -196,17 +196,21 @@ export function registerAIIPC(): void {
 
   // 获取单个会话
   ipcMain.handle('ai:get-session', async (_, sessionId: string) => {
+    console.log('[AI IPC] get-session 被调用，sessionId:', sessionId)
     try {
       const agent = agentManager.getAgent()
       if (!agent) {
+        console.log('[AI IPC] AI Agent 未初始化')
         return { success: false, message: 'AI Agent 未初始化' }
       }
 
       const session = agent.getSession(sessionId)
+      console.log('[AI IPC] get-session 返回，session:', session ? { id: session.id, msgCount: session.messages?.length } : null)
       return { success: true, session }
     } catch (error) {
-      return { 
-        success: false, 
+      console.error('[AI IPC] get-session 错误:', error)
+      return {
+        success: false,
         message: error instanceof Error ? error.message : '获取会话失败'
       }
     }
@@ -223,9 +227,31 @@ export function registerAIIPC(): void {
       const deleted = agent.deleteSession(sessionId)
       return { success: deleted }
     } catch (error) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         message: error instanceof Error ? error.message : '删除会话失败'
+      }
+    }
+  })
+
+  // 同步会话（用于弹出窗口前将渲染进程的会话同步到主进程）
+  ipcMain.handle('ai:sync-session', async (_, session: ChatSession) => {
+    console.log('[AI IPC] sync-session 被调用，session:', session ? { id: session.id, msgCount: session.messages?.length } : null)
+    try {
+      const agent = agentManager.getAgent()
+      if (!agent) {
+        console.log('[AI IPC] AI Agent 未初始化')
+        return { success: false, message: 'AI Agent 未初始化' }
+      }
+
+      agent.setSession(session)
+      console.log('[AI IPC] sync-session 成功，当前所有 sessions:', agent.getAllSessions().map((s: any) => ({ id: s.id, msgCount: s.messages?.length })))
+      return { success: true }
+    } catch (error) {
+      console.error('[AI IPC] sync-session 错误:', error)
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '同步会话失败'
       }
     }
   })

@@ -21,6 +21,7 @@ import type {
 import { buildSystemPrompt } from '../prompts/sql-prompts'
 import { createAllTools, type ToolContext } from '../tools/sql-tools'
 import { classifySQLSafety } from '../utils/sql-safety'
+import { loadSessions, saveSessions, clearStoredSessions } from '../utils/session-store'
 
 /**
  * SQL Agent 类
@@ -46,6 +47,25 @@ export class SQLAgent {
     this.sqliteService = sqliteService
     this.sshService = sshService
     this.config = config
+    this.loadPersistedSessions()
+  }
+
+  /**
+   * 从磁盘加载之前持久化的会话
+   */
+  private loadPersistedSessions(): void {
+    const loaded = loadSessions()
+    if (loaded.size > 0) {
+      this.sessions = loaded
+      console.log(`从本地恢复了 ${loaded.size} 个 AI 会话`)
+    }
+  }
+
+  /**
+   * 将当前所有会话持久化到磁盘
+   */
+  private persistSessions(): void {
+    saveSessions(this.sessions)
   }
 
   /**
@@ -275,6 +295,7 @@ export class SQLAgent {
         { id: `msg_${Date.now()}_ai`, role: 'assistant', type: 'text', content: fullContent, timestamp: Date.now() }
       )
       session.updatedAt = Date.now()
+      this.persistSessions()
 
     } catch (error) {
       console.error('[DEBUG chatStream] ERROR:', error)
@@ -423,7 +444,11 @@ ${error}
    * 删除会话
    */
   deleteSession(sessionId: string): boolean {
-    return this.sessions.delete(sessionId)
+    const deleted = this.sessions.delete(sessionId)
+    if (deleted) {
+      this.persistSessions()
+    }
+    return deleted
   }
 
   /**
@@ -432,15 +457,15 @@ ${error}
   clearSessions(): void {
     this.sessions.clear()
     this.currentSessionId = null
+    clearStoredSessions()
   }
 
   /**
    * 设置/更新会话（用于从渲染进程同步）
    */
   setSession(session: ChatSession): void {
-    console.log('[SQLAgent] setSession 被调用，session:', { id: session.id, msgCount: session.messages?.length })
     this.sessions.set(session.id, session)
-    console.log('[SQLAgent] setSession 完成，当前 sessions 数量:', this.sessions.size)
+    this.persistSessions()
   }
 
   /**

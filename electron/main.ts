@@ -117,8 +117,6 @@ function setupIPC() {
     const sessionParam = sessionId ? `?sessionId=${sessionId}` : ''
     const url = `${baseUrl}${hashRoute}${sessionParam}`
 
-    console.log('[Main] 打开弹出窗口，URL:', url)
-
     popoutWindow = new BrowserWindow({
       width: 520,
       height: 700,

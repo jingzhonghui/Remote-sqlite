@@ -39,6 +39,13 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // 挂载时从主进程加载持久化的会话列表
+  useEffect(() => {
+    if (!isPopout) {
+      useAIStore.getState().loadSessionsFromMain()
+    }
+  }, [isPopout])
+
   // 监听弹出窗口关闭事件（主窗口模式）
   useEffect(() => {
     const cleanup = (window as any).electronAPI?.ai?.onPopoutClosed?.(() => {

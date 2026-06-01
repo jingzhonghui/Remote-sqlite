@@ -36,6 +36,7 @@ interface AIState {
   abortStream?: () => void
   
   // Actions - 会话管理
+  loadSessionsFromMain: () => Promise<void>
   createSession: (context: DatabaseContext) => string
   switchSession: (sessionId: string) => void
   deleteSession: (sessionId: string) => void
@@ -79,6 +80,28 @@ export const useAIStore = create<AIState>()((set, get) => ({
   pendingConfirmation: null,
 
   // Actions - 会话管理
+  loadSessionsFromMain: async () => {
+    try {
+      const result = await (window as any).electronAPI?.ai?.getSessions()
+      if (result?.success && result.sessions) {
+        const loadedSessions = result.sessions
+        const state = get()
+
+        set({ sessions: loadedSessions })
+
+        // 如果当前会话 ID 在加载的会话中，同步恢复消息
+        if (state.currentSessionId) {
+          const currentSession = loadedSessions.find((s: any) => s.id === state.currentSessionId)
+          if (currentSession) {
+            set({ messages: currentSession.messages || [] })
+          }
+        }
+      }
+    } catch (error) {
+      console.error('从主进程加载会话失败:', error)
+    }
+  },
+
   createSession: (context) => {
     const newSession: ChatSession = {
       id: `session_${Date.now()}`,
@@ -88,13 +111,16 @@ export const useAIStore = create<AIState>()((set, get) => ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
-    
+
     set((state) => ({
       sessions: [...state.sessions, newSession],
       currentSessionId: newSession.id,
       messages: [],
     }))
-    
+
+    // 同步到主进程以便持久化
+    ;(window as any).electronAPI?.ai?.syncSession(newSession)
+
     return newSession.id
   },
 
@@ -116,6 +142,9 @@ export const useAIStore = create<AIState>()((set, get) => ({
           ? newSessions[newSessions.length - 1]?.id || null
           : state.currentSessionId
       
+      // 同步删除到主进程
+      ;(window as any).electronAPI?.ai?.deleteSession(sessionId)
+
       return {
         sessions: newSessions,
         currentSessionId: newCurrentId,
@@ -353,6 +382,16 @@ export const useAIStore = create<AIState>()((set, get) => ({
           const msg4 = get().messages[get().messages.length - 1]
           if (msg4?.role === 'assistant') {
             get().updateMessage(msg4.id, { isStreaming: false })
+          }
+          // 同步最新会话数据到主进程进行持久化
+          const stateAfterComplete = get()
+          if (stateAfterComplete.currentSessionId) {
+            const session = stateAfterComplete.sessions.find(
+              (s) => s.id === stateAfterComplete.currentSessionId
+            )
+            if (session) {
+              ;(window as any).electronAPI?.ai?.syncSession(session)
+            }
           }
         }
         break

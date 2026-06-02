@@ -59,9 +59,9 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
   useEffect(() => {
     if (!isPopout) return
 
-    console.log('[AI Popout] 弹出窗口初始化，URL:', window.location.href)
-    console.log('[AI Popout] window.location.search:', window.location.search)
-    console.log('[AI Popout] window.location.hash:', window.location.hash)
+    // console.log('[AI Popout] 弹出窗口初始化，URL:', window.location.href)
+    // console.log('[AI Popout] window.location.search:', window.location.search)
+    // console.log('[AI Popout] window.location.hash:', window.location.hash)
 
     const loadSessionFromMain = async () => {
       try {
@@ -72,33 +72,24 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
         const params = new URLSearchParams(queryString)
         const sessionId = params.get('sessionId')
 
-        console.log('[AI Popout] 从 hash 解析 queryString:', queryString)
-        console.log('[AI Popout] 从 URL 获取 sessionId:', sessionId)
 
         if (!sessionId) {
-          console.log('[AI Popout] 没有 sessionId，跳过加载')
           return
         }
 
         // 从主进程获取会话数据
-        console.log('[AI Popout] 调用 getSession:', sessionId)
         const result = await (window as any).electronAPI?.ai?.getSession(sessionId)
-        console.log('[AI Popout] getSession 返回:', result)
 
         if (result?.success && result.session) {
-          console.log('[AI Popout] 获取到 session，消息数:', result.session.messages?.length)
-          console.log('[AI Popout] session 内容:', JSON.stringify(result.session, null, 2))
 
           // 将会话数据同步到当前 store
           const { sessions } = useAIStore.getState()
-          console.log('[AI Popout] 当前 store sessions:', sessions.length)
 
           // 如果该会话不在列表中，添加到列表
           if (!sessions.find((s: any) => s.id === sessionId)) {
             useAIStore.setState({
               sessions: [...sessions, result.session],
             })
-            console.log('[AI Popout] session 已添加到 store')
           }
 
           // 切换到该会话
@@ -106,9 +97,8 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
             currentSessionId: sessionId,
             messages: result.session.messages || [],
           })
-          console.log('[AI Popout] 消息已设置到 store，条数:', result.session.messages?.length)
         } else {
-          console.log('[AI Popout] 未获取到 session 或 session 为空')
+          // console.log('[AI Popout] 未获取到 session 或 session 为空')
         }
       } catch (error) {
         console.error('[AI Popout] 加载会话数据失败:', error)
@@ -126,28 +116,19 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
       setIsPopout(false)
       useAIStore.getState().setPanelOpen(true)
     } else {
-      console.log('[AI Sidebar] 点击弹出，当前 sessionId:', currentSessionId)
-      console.log('[AI Sidebar] 当前 sessions:', sessions.map((s: any) => ({ id: s.id, msgCount: s.messages?.length })))
-      console.log('[AI Sidebar] 当前 messages:', messages.length)
-
       // 弹出前：先同步当前会话数据到主进程
       if (currentSessionId) {
         const currentSession = sessions.find((s: any) => s.id === currentSessionId)
-        console.log('[AI Sidebar] 找到的 currentSession:', currentSession ? { id: currentSession.id, msgCount: currentSession.messages?.length } : null)
 
         if (currentSession) {
           // 同步最新的消息数据到 session
           const sessionToSync = { ...currentSession, messages }
-          console.log('[AI Sidebar] 准备同步到主进程:', { id: sessionToSync.id, msgCount: sessionToSync.messages?.length })
-          const syncResult = await (window as any).electronAPI?.ai?.syncSession(sessionToSync)
-          console.log('[AI Sidebar] syncSession 返回:', syncResult)
+          await (window as any).electronAPI?.ai?.syncSession(sessionToSync)
         }
       }
 
       // 打开独立窗口，传递当前会话 ID
-      console.log('[AI Sidebar] 打开弹出窗口，sessionId:', currentSessionId)
       const result = await (window as any).electronAPI?.ai?.openPopoutWindow(currentSessionId)
-      console.log('[AI Sidebar] openPopoutWindow 返回:', result)
 
       if (result?.success) {
         setIsPopout(true)
@@ -346,12 +327,15 @@ export default function AIAssistantPanel({ isOpen: _isOpen, onClose }: AIAssista
           {/* 弹出/还原窗口按钮 */}
           <button
             onClick={handlePopout}
+            disabled={isGenerating}
             className={`p-2 rounded-lg transition-colors ${
               isPopout
                 ? 'bg-accent/10 text-accent hover:bg-accent/20'
-                : 'hover:bg-hover text-text-muted hover:text-text'
+                : isGenerating
+                  ? 'opacity-40 cursor-not-allowed text-text-muted'
+                  : 'hover:bg-hover text-text-muted hover:text-text'
             }`}
-            title={isPopout ? '还原到侧边栏' : '弹出独立窗口'}
+            title={isPopout ? '还原到侧边栏' : isGenerating ? 'AI 生成中，请等待完成后再弹出' : '弹出独立窗口'}
           >
             {isPopout ? (
               <PanelRightOpen className="w-5 h-5" />

@@ -34,7 +34,7 @@ interface AIState {
   isGenerating: boolean
   pendingConfirmation: DangerousOperation | null
   abortStream?: () => void
-  
+
   // Actions - 会话管理
   loadSessionsFromMain: () => Promise<void>
   createSession: (context: DatabaseContext) => string

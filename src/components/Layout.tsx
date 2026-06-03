@@ -21,7 +21,7 @@ const navItems = [
 // 默认宽度和限制
 const DEFAULT_AI_WIDTH = 480
 const MIN_AI_WIDTH = 320
-const MAX_AI_WIDTH = 800
+const MIN_MAIN_WIDTH = 800 // 主内容区域最小宽度
 
 export default function Layout({ children, currentTab, onTabChange }: LayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -43,8 +43,11 @@ export default function Layout({ children, currentTab, onTabChange }: LayoutProp
 
     const handleMouseMove = (e: MouseEvent) => {
       const newWidth = window.innerWidth - e.clientX
-      if (newWidth >= MIN_AI_WIDTH && newWidth <= MAX_AI_WIDTH) {
-        setAiWidth(newWidth)
+      const leftSidebarWidth = 64
+      const maxAiWidth = Math.max(MIN_AI_WIDTH, window.innerWidth - leftSidebarWidth - MIN_MAIN_WIDTH)
+      const clampedWidth = Math.min(newWidth, maxAiWidth)
+      if (clampedWidth >= MIN_AI_WIDTH && clampedWidth <= maxAiWidth) {
+        setAiWidth(clampedWidth)
       }
     }
 
@@ -128,7 +131,7 @@ export default function Layout({ children, currentTab, onTabChange }: LayoutProp
         {/* Main Content Area */}
         <div className="flex-1 flex overflow-hidden">
           {/* Main Content */}
-          <main className={`flex-1 overflow-hidden p-1.5 transition-all duration-300`}>
+          <main className={`flex-1 overflow-hidden p-1.5 transition-all duration-300`} style={{ minWidth: MIN_MAIN_WIDTH }}>
             <div className="h-full neu-card p-1">
               {children}
             </div>

@@ -3,6 +3,10 @@
 跨平台远程 SQLite 数据库管理桌面应用 - 无需下载数据库文件，即可通过 SSH 直接操作远程服务器上的 SQLite 数据库。
 
 ---
+软件截图：
+![截图](docs/demo.png)
+演示视频：
+<video controls src="docs/demo.mp4" title="演示视频"></video>
 
 ## 功能特性
 
